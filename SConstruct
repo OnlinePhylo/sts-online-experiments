@@ -62,7 +62,7 @@ def nexus(outdir, c):
     else:
         target = j(stripext(c['tree']) + '_trimmed.nex')
         return env.Local(target, c['fasta'],
-                'seqmagick convert $SOURCE $TARGET --alphabet dna --output-format nexus --head 4')[0]
+                'seqmagick convert $SOURCE $TARGET --alphabet dna --output-format nexus --head 9')[0]
 
 @w.add_target()
 def mrbayes_config(outdir, c):
@@ -85,7 +85,7 @@ def newick_trees(outdir, c):
         for tree in c['mrbayes_trees']:
             i, = env.Command(j(stripext(str(tree)) + '_online.trees'),
                     [c['fasta'], tree],
-                    'bin/sts-online $SOURCES -b 250 | cut -f 2 > $TARGET')
+                    'bin/sts-online $SOURCES -b 250 -p 4 -m 6 | cut -f 2 > $TARGET')
             r.append(i)
     c['compare_trees'][c['type']] = r
     return r

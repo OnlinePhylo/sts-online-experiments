@@ -5,7 +5,7 @@ library(ape)
 set.seed(1)
 
 n_trees <- 10
-n_taxa <- 5
+n_taxa <- 10
 
 idx <- 1:n_trees
 
