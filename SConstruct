@@ -45,9 +45,11 @@ def fasta(outdir, c):
 
 @w.add_aggregate(dict)
 def compare_trees(outdir, c, inputs):
-    print inputs
-
-
+    j = joiner(outdir)
+    all_trees = [tree for v in inputs.values() for tree in v]
+    env.Command(j('comparisons.csv'),
+                all_trees,
+                'bin/trees_compare.py $SOURCES -o $TARGET')
 
 nest.add('type', ('full', 'trimmed'))
 
