@@ -15,6 +15,7 @@ def joiner(*args):
 
 trees = map(os.path.abspath, glob.glob('trees/*.nwk'))
 
+
 env = SlurmEnvironment(ENV=os.environ.copy())
 
 # Builders
@@ -22,6 +23,8 @@ env['BUILDERS']['ConvertToNexus'] = Builder(action='seqmagick convert --alphabet
 env['BUILDERS']['NexusToNewick'] = Builder(action='nexus_to_newick.py $SOURCE $TARGET -b 250', suffix='.nwk', src_suffix='.t')
 env['BUILDERS']['MrBayesConf'] = Builder(action='python bin/generate_mb.py $SOURCE -o $TARGET', suffix='.mb', src_suffix='.nex')
 # End builders
+
+env.SConscript('src/SConscript')
 
 nest = Nest()
 w = SConsWrap(nest, 'output')
@@ -62,7 +65,7 @@ def nexus(outdir, c):
     else:
         target = j(stripext(c['tree']) + '_trimmed.nex')
         return env.Local(target, c['fasta'],
-                'seqmagick convert $SOURCE $TARGET --alphabet dna --output-format nexus --head 9')[0]
+                'seqmagick convert $SOURCE $TARGET --alphabet dna --output-format nexus --pattern-exclude="^t1\\$"')[0]
 
 @w.add_target()
 def mrbayes_config(outdir, c):
@@ -83,11 +86,27 @@ def newick_trees(outdir, c):
         j = joiner(outdir)
         r = []
         for tree in c['mrbayes_trees']:
-            i, = env.Command(j(stripext(str(tree)) + '_online.trees'),
+            i, = env.Command(j(stripext(str(tree)) + '_online.nwk'),
                     [c['fasta'], tree],
-                    'bin/sts-online $SOURCES -b 250 -p 4 -m 6 | cut -f 2 > $TARGET')
+                    'bin/sts-online $SOURCES -b 250 -p 3 -m 6 | cut -f 2 > $TARGET')
             r.append(i)
     c['compare_trees'][c['type']] = r
     return r
+
+@w.add_target()
+def natural_extension_result(outdir, c):
+    if c['type'] != 'full':
+        return None
+
+    tree = c['mrbayes_trees'][0]
+    res, = env.Command(joiner(outdir)(stripext(str(tree)) + '_natext.csv'),
+        [c['fasta'], tree],
+        'src/natural_extension '
+        'input.sequence.file=${SOURCES[0]} '
+        'natural_extension.trees_nexus=${SOURCES[1]} '
+        'natural_extension.burnin=250 '
+        'natural_extension.prune_taxon=t1 '
+        'natural_extension.output_path=$TARGET')
+    env.Depends(res, 'src/natural_extension')
 
 w.finalize_all_aggregates()
