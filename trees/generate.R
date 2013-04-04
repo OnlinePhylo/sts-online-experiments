@@ -4,15 +4,15 @@ library(ape)
 
 set.seed(1)
 
-n_trees <- 10
-n_taxa <- 10
+n_trees_per_taxon_count <- 2
+n_taxa <- c(10, 25, 50)
 
-idx <- 1:n_trees
-
-r <- lapply(as.list(idx), function(i) {
-  path <- sprintf('tree%03d.nwk', i)
-  write.tree(rtree(n_taxa, br=rexp, rate=10),
-             path)
-  message(path)
-  path
+r <- lapply(as.list(n_taxa), function(i) {
+  lapply(as.list(1:n_trees_per_taxon_count), function(j) {
+    path <- sprintf('tree-%03dtax-%d.nwk', i, j)
+    write.tree(rtree(i, br=rexp, rate=10),
+               path)
+    message(path)
+    path
+  })
 })
