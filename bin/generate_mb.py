@@ -9,7 +9,7 @@ TEMPLATE = """
 begin mrbayes;
     set autoclose=yes nowarn=yes;
     execute {nexus};
-    lset nst=1;
+    lset nst=1 rates=equal;
     prset statefreqpr=fixed(equal);
     {extra}
     mcmc nruns=2 ngen=1000000 samplefreq=1000 printfreq=10000 file={out_base};

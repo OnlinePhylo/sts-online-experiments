@@ -1,9 +1,11 @@
 env = Environment(
         LIBS=['gsl', 'gslcblas', 'bpp-core', 'bpp-seq', 'bpp-phyl'],
-        CXXFLAGS='-std=c++0x',
+        CXXFLAGS='-std=c++0x -O3 -Wall -Wpedantic',
         LIBPATH=['/home/matsengrp/local/lib'],
         CPPPATH=['/home/matsengrp/local/include'],
         CXX='/home/matsengrp/local/bin/clang++',
         )
 
 natural_extension = env.Program('natural_extension.cc')
+
+Return('natural_extension')
