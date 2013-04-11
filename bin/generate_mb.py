@@ -12,7 +12,7 @@ begin mrbayes;
     lset nst=1 rates=equal;
     prset statefreqpr=fixed(equal);
     {extra}
-    mcmc nruns=2 ngen=1000000 samplefreq=1000 printfreq=10000 file={out_base};
+    mcmc nruns=2 nchains=3 ngen=10000000 samplefreq=10000 printfreq=100000 file={out_base};
 end;
 """
 

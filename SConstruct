@@ -21,7 +21,7 @@ env = SlurmEnvironment(ENV=os.environ.copy())
 # Builders
 env['BUILDERS']['ConvertToNexus'] = Builder(action='seqmagick convert --alphabet dna --output-format nexus $SOURCE $TARGET', suffix='.nex', src_suffix='.fasta')
 env['BUILDERS']['NexusToNewick'] = Builder(action='nexus_to_newick.py $SOURCE $TARGET -b 250', suffix='.nwk', src_suffix='.t')
-env['BUILDERS']['MrBayesConf'] = Builder(action='python bin/generate_mb.py $SOURCE -o $TARGET', suffix='.mb', src_suffix='.nex')
+env['BUILDERS']['MrBayesConf'] = Builder(action='bin/generate_mb.py $SOURCE -o $TARGET', suffix='.mb', src_suffix='.nex')
 # End builders
 
 natural_extension = env.SConscript('src/SConscript')
