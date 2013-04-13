@@ -1,8 +1,11 @@
 #!/usr/bin/env scons -Q
 
+from __future__ import division
+
 import glob
 import os
 import os.path
+import re
 import functools
 
 from nestly import Nest, stripext
@@ -15,24 +18,33 @@ def joiner(*args):
 
 trees = map(os.path.abspath, glob.glob('trees/*.nwk'))
 
-
 env = SlurmEnvironment(ENV=os.environ.copy())
+env.PrependENVPath('PATH', './bin')
 
 # Builders
 env['BUILDERS']['ConvertToNexus'] = Builder(action='seqmagick convert --alphabet dna --output-format nexus $SOURCE $TARGET', suffix='.nex', src_suffix='.fasta')
 env['BUILDERS']['NexusToNewick'] = Builder(action='nexus_to_newick.py $SOURCE $TARGET -b 250', suffix='.nwk', src_suffix='.t')
-env['BUILDERS']['MrBayesConf'] = Builder(action='bin/generate_mb.py $SOURCE -o $TARGET', suffix='.mb', src_suffix='.nex')
+env['BUILDERS']['MrBayesConf'] = Builder(action='generate_mb.py $SOURCE -o $TARGET', suffix='.mb', src_suffix='.nex')
+env['BUILDERS']['StsTrees'] = Builder(action='cut -f 2 $SOURCE > $TARGET', suffix='.trees', src_suffix='.sts')
+env['BUILDERS']['StsLikes'] = Builder(action='cut -f 1 $SOURCE > $TARGET', suffix='.txt', src_suffix='.sts')
 # End builders
 
 natural_extension = env.SConscript('src/SConscript')
 
 nest = Nest()
-w = SConsWrap(nest, 'output')
+w = SConsWrap(nest, dest_dir='output')
+
+target_with_env = functools.partial(w.add_target_with_env, environment=env)
 
 nest.add('tree', trees, label_func=stripext)
+def get_n_taxa(c):
+    m = re.search(r'(\d+)taxon-.*', c['tree'])
+    assert m
+    return [int(m.group(1))]
+nest.add('n_taxa', get_n_taxa, create_dir=False)
 
-@w.add_target()
-def fasta(outdir, c):
+@target_with_env()
+def fasta(env, outdir, c):
     j = joiner(outdir)
     target = j(stripext(c['tree']) + '.fasta')
     return env.Local(target, c['tree'],
@@ -46,21 +58,72 @@ def fasta(outdir, c):
       'rate_distribution=Uniform '
       'model=JC69 ')[0]
 
-@w.add_target()
-def full_nexus(outdir, c):
+@target_with_env()
+def full_nexus(env, outdir, c):
     j = joiner(outdir)
     fasta = str(c['fasta'])
     return env.ConvertToNexus(j(stripext(fasta) + '.nex'), fasta)[0]
 
-@w.add_target()
-def full_mrbayes_config(outdir, c):
+@target_with_env()
+def full_mrbayes_config(env, outdir, c):
     return env.MrBayesConf(c['full_nexus'])[0]
 
-@w.add_target()
-def full_mrbayes_trees(outdir, c):
+@target_with_env()
+def full_mrbayes_trees(env, outdir, c):
     j = joiner(outdir)
     targets = [j(stripext(str(c['full_nexus'])) + '.run{0}.t'.format(i)) for i in (1,2)]
     return env.SAlloc(targets, c['full_mrbayes_config'], 'mpirun mb $SOURCE', 6)
+
+def trim_counts(c):
+    n_taxa = c['n_taxa']
+    half_n_taxa = n_taxa / 2
+
+    return [i for i in (1, 2, 5, 10) if i <= half_n_taxa]
+
+nest.add('trim_count', trim_counts)
+nest.add('keep_count', lambda c: [c['n_taxa'] - c['trim_count']],
+         create_dir=False)
+
+nest.add('trim_base', lambda c: ['{n_taxa}tax_trim{trim_count}'.format(**c)],
+         create_dir=False)
+
+@target_with_env()
+def trimmed_nexus(env, outdir, c):
+    return env.Local('$OUTDIR/${trim_base}.nex',
+            '$full_nexus',
+            'seqmagick convert --head $keep_count --input-format '
+            'nexus --alphabet dna $SOURCE $TARGET')[0]
+
+@target_with_env()
+def trimmed_mrbayes_config(env, outdir, c):
+    return env.MrBayesConf(c['trimmed_nexus'])[0]
+
+@target_with_env()
+def trimmed_mrbayes_trees(env, outdir, c):
+    targets = ['$OUTDIR/${{trim_base}}.run{0}.{1}'.format(i, j)
+               for j in ('t', 'p')
+               for i in (1, 2)]
+    return env.SAlloc(targets,
+                      ['$trimmed_mrbayes_config', '$trimmed_nexus'],
+                      'mpirun mb $SOURCE', 6)
+
+@target_with_env()
+def sts_online(env, outdir, c):
+    j = joiner(outdir)
+    return [env.Command(j(stripext(str(treefile)) + '.sts'),
+                        ['$fasta', treefile],
+                        'sts-online -p 8 -b 250 --tree-moves 0 $SOURCES > $TARGET')[0]
+            for treefile in c['trimmed_mrbayes_trees'][:2]]
+
+#@target_with_env()
+#def sts_online_trees(env, outdir, c):
+    #return [env.StsTrees(i) for i in c['sts_online']]
+
+@target_with_env()
+def lnl_comparison(env, outdir, c):
+    return env.Local('$OUTDIR/${trim_base}_lnl_comp.pdf',
+                     env.Flatten(['$sts_online', '$full_mrbayes_trees']),
+                     'lnl_compare.R $SOURCES $TARGET')[0]
 
 #@w.add_aggregate(dict)
 #def compare_trees(outdir, c, inputs):
@@ -71,21 +134,6 @@ def full_mrbayes_trees(outdir, c):
                 #'bin/trees_compare.py $SOURCES -o $TARGET')
 
 #nest.add('type', ('full', 'trimmed'))
-
-#@w.add_target()
-#def nexus(outdir, c):
-    #j = joiner(outdir)
-    #if c['type'] == 'full':
-        #fasta = str(c['fasta'])
-        #return env.ConvertToNexus(j(stripext(fasta) + '.nex'), fasta)[0]
-    #else:
-        #target = j(stripext(c['tree']) + '_trimmed.nex')
-        #return env.Local(target, c['fasta'],
-                #'seqmagick convert $SOURCE $TARGET --alphabet dna --output-format nexus --pattern-exclude="^t1\\$"')[0]
-
-#@w.add_target()
-#def mrbayes_config(outdir, c):
-    #return env.MrBayesConf(c['nexus'])[0]
 
 #@w.add_target()
 #def mrbayes_trees(outdir, c):
@@ -125,4 +173,4 @@ def full_mrbayes_trees(outdir, c):
         #'natural_extension.output_path=$TARGET')
     #env.Depends(res, 'src/natural_extension')
 
-#w.finalize_all_aggregates()
+w.finalize_all_aggregates()
