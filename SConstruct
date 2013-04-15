@@ -71,7 +71,9 @@ def full_mrbayes_config(env, outdir, c):
 @target_with_env()
 def full_mrbayes_trees(env, outdir, c):
     j = joiner(outdir)
-    targets = [j(stripext(str(c['full_nexus'])) + '.run{0}.t'.format(i)) for i in (1,2)]
+    targets = [j('{0}.run{1}.{2}'.format(stripext(str(c['full_nexus'])), i, t))
+               for t in ('t', 'p')
+               for i in (1, 2)]
     return env.SAlloc(targets, c['full_mrbayes_config'], 'mpirun mb $SOURCE', 6)
 
 def trim_counts(c):
@@ -122,7 +124,7 @@ def sts_online(env, outdir, c):
 @target_with_env()
 def lnl_comparison(env, outdir, c):
     return env.Local('$OUTDIR/${trim_base}_lnl_comp.pdf',
-                     env.Flatten(['$sts_online', '$full_mrbayes_trees']),
+                     env.Flatten([c['sts_online'], c['full_mrbayes_trees'][2:]]),
                      'lnl_compare.R $SOURCES $TARGET')[0]
 
 #@w.add_aggregate(dict)
