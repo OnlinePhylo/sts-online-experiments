@@ -9,7 +9,7 @@ stopifnot(length(args) == 5)
 cols <- c('LnL', 'source', 'file_name')
 
 read_sts <- function(s) {
-  sts <- read.table(args[1], col.names=c('LnL', 'tree'))
+  sts <- read.table(s, col.names=c('LnL', 'tree'))
   transform(sts, source='STS-online', file_name=basename(s))[,cols]
 }
 
@@ -21,7 +21,7 @@ read_mb <- function(s) {
 }
 
 stacked <- rbind(read_sts(args[1]), read_sts(args[2]),
-                read_mb(args[3]), read_mb(args[4]))
+                 read_mb(args[3]), read_mb(args[4]))
 
 
 p1 <- ggplot(stacked, aes(x=LnL, linetype=source, color=file_name)) +

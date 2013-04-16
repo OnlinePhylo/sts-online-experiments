@@ -25,7 +25,7 @@ env.PrependENVPath('PATH', './bin')
 env['BUILDERS']['ConvertToNexus'] = Builder(action='seqmagick convert --alphabet dna --output-format nexus $SOURCE $TARGET', suffix='.nex', src_suffix='.fasta')
 env['BUILDERS']['NexusToNewick'] = Builder(action='nexus_to_newick.py $SOURCE $TARGET -b 250', suffix='.nwk', src_suffix='.t')
 env['BUILDERS']['MrBayesConf'] = Builder(action='generate_mb.py $SOURCE -o $TARGET', suffix='.mb', src_suffix='.nex')
-env['BUILDERS']['StsTrees'] = Builder(action='cut -f 2 $SOURCE > $TARGET', suffix='.trees', src_suffix='.sts')
+env['BUILDERS']['StsTrees'] = Builder(action='sts_to_nexus.py < $SOURCE > $TARGET', suffix='.trees', src_suffix='.sts')
 env['BUILDERS']['StsLikes'] = Builder(action='cut -f 1 $SOURCE > $TARGET', suffix='.txt', src_suffix='.sts')
 # End builders
 
@@ -76,6 +76,16 @@ def full_mrbayes_trees(env, outdir, c):
                for i in (1, 2)]
     return env.SAlloc(targets, c['full_mrbayes_config'], 'mpirun mb $SOURCE', 6)
 
+@target_with_env()
+def full_mrbayes_newick(env, outdir, c):
+    return [env.NexusToNewick(t)[0] for t in c['full_mrbayes_trees'][:2]]
+
+@target_with_env()
+def full_mrbayes_consensus(env, outdir, c):
+    return [env.Command('$OUTDIR/' + stripext(str(t)) + '.sum.tre',
+                        t,
+                        'sumtrees.py -b 250 $SOURCE > $TARGET')[0] for t in c['full_mrbayes_trees'][:2]]
+
 def trim_counts(c):
     n_taxa = c['n_taxa']
     half_n_taxa = n_taxa / 2
@@ -109,28 +119,45 @@ def trimmed_mrbayes_trees(env, outdir, c):
                       ['$trimmed_mrbayes_config', '$trimmed_nexus'],
                       'mpirun mb $SOURCE', 6)
 
+#nest.add('tree_moves', (0, 5, 10))
+nest.add('tree_moves', [0])
+
 @target_with_env()
 def sts_online(env, outdir, c):
     j = joiner(outdir)
     return [env.Command(j(stripext(str(treefile)) + '.sts'),
                         ['$fasta', treefile],
-                        'sts-online -p 8 -b 250 --tree-moves 0 $SOURCES > $TARGET')[0]
+                        'sts-online -p 5 -b 250 --tree-moves $tree_moves $SOURCES > $TARGET')[0]
             for treefile in c['trimmed_mrbayes_trees'][:2]]
 
-#@target_with_env()
-#def sts_online_trees(env, outdir, c):
-    #return [env.StsTrees(i) for i in c['sts_online']]
+@target_with_env()
+def sts_online_trees(env, outdir, c):
+    return [env.StsTrees(i) for i in c['sts_online']]
 
 @target_with_env()
-def lnl_comparison(env, outdir, c):
-    return env.Local('$OUTDIR/${trim_base}_lnl_comp.pdf',
-                     env.Flatten([c['sts_online'], c['full_mrbayes_trees'][2:]]),
-                     'lnl_compare.R $SOURCES $TARGET')[0]
+def sts_consensus(env, outdir, c):
+    return [env.Command('$OUTDIR/' + stripext(str(t)) + '.sum.tre',
+                        t,
+                        'sumtrees.py --weighted-trees $SOURCE > $TARGET')[0] for t in c['sts_online_trees']]
 
-#@w.add_aggregate(dict)
-#def compare_trees(outdir, c, inputs):
+@target_with_env()
+def consensus_comparison(env, outdir, c):
+    sources = [c['tree']] + list(c['sts_consensus']) + c['full_mrbayes_consensus']
+    return env.Local('$OUTDIR/consensus_to_source.csv',
+            sources,
+            'compare_to_source.py $SOURCES -o $TARGET --schema nexus')
+
+#@target_with_env()
+#def lnl_comparison(env, outdir, c):
+    #return env.Local('$OUTDIR/${trim_base}_lnl_comp.pdf',
+                     #env.Flatten([c['sts_online'], c['full_mrbayes_trees'][2:]]),
+                     #'lnl_compare.R $SOURCES $TARGET')[0]
+
+
+#@target_with_env()
+#def compare_trees(env, outdir, c):
     #j = joiner(outdir)
-    #all_trees = [tree for v in inputs.values() for tree in v]
+    #all_trees = list(c['sts_online_trees']) + c['full_mrbayes_newick']
     #env.Command(j('comparisons.csv'),
                 #all_trees,
                 #'bin/trees_compare.py $SOURCES -o $TARGET')
