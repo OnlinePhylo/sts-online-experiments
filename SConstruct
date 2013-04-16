@@ -147,6 +147,8 @@ def consensus_comparison(env, outdir, c):
             sources,
             'compare_to_source.py $SOURCES -o $TARGET --schema nexus')
 
+w.add_controls(env)
+
 #@target_with_env()
 #def lnl_comparison(env, outdir, c):
     #return env.Local('$OUTDIR/${trim_base}_lnl_comp.pdf',
