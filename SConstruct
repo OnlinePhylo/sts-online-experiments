@@ -16,13 +16,14 @@ from SCons.Script import Builder
 def joiner(*args):
     return functools.partial(os.path.join, *args)
 
-trees = map(os.path.abspath, glob.glob('trees/*.nwk'))
+trees = sorted(map(os.path.abspath, glob.glob('trees/*.nwk')))[:2]
 
 env = SlurmEnvironment(ENV=os.environ.copy())
 env.PrependENVPath('PATH', './bin')
 
 # Builders
 env['BUILDERS']['ConvertToNexus'] = Builder(action='seqmagick convert --alphabet dna --output-format nexus $SOURCE $TARGET', suffix='.nex', src_suffix='.fasta')
+env['BUILDERS']['ConvertToPhyx'] = Builder(action='seqmagick convert $SOURCE $TARGET', suffix='.phyx', src_suffix='.fasta')
 env['BUILDERS']['NexusToNewick'] = Builder(action='nexus_to_newick.py $SOURCE $TARGET -b 250', suffix='.nwk', src_suffix='.t')
 env['BUILDERS']['MrBayesConf'] = Builder(action='generate_mb.py $SOURCE -o $TARGET', suffix='.mb', src_suffix='.nex')
 env['BUILDERS']['StsTrees'] = Builder(action='sts_to_nexus.py < $SOURCE > $TARGET', suffix='.trees', src_suffix='.sts')
@@ -54,9 +55,19 @@ def fasta(env, outdir, c):
       'output.sequence.file=$TARGET '
       'output.sequence.format=Fasta '
       'alphabet=DNA '
-      'number_of_sites=500 '
+      'number_of_sites=1000 '
       'rate_distribution=Uniform '
       'model=JC69 ')[0]
+
+@target_with_env()
+def full_phylip(env, outdir, c):
+    return env.ConvertToPhyx(c['fasta'])[0]
+
+@target_with_env()
+def phyml_tree(env, outdir, c):
+    return env.Command('${full_phylip}_phyml_tree.txt',
+            ['$full_phylip', '$tree'],
+            'phyml -i ${SOURCES[0]} -u ${SOURCES[1]} -c 1 -m JC69 -o tl -b 0')[0]
 
 @target_with_env()
 def full_nexus(env, outdir, c):
@@ -122,12 +133,14 @@ def trimmed_mrbayes_trees(env, outdir, c):
 #nest.add('tree_moves', (0, 5, 10))
 nest.add('tree_moves', [0])
 
+nest.add('particle_factor', [1, 2, 5, 10])
+
 @target_with_env()
 def sts_online(env, outdir, c):
     j = joiner(outdir)
     return [env.Command(j(stripext(str(treefile)) + '.sts'),
                         ['$fasta', treefile],
-                        'sts-online -p 5 -b 250 --tree-moves $tree_moves $SOURCES > $TARGET')[0]
+                        'sts-online -p $particle_factor -b 250 --tree-moves $tree_moves $SOURCES > $TARGET')[0]
             for treefile in c['trimmed_mrbayes_trees'][:2]]
 
 @target_with_env()
@@ -136,57 +149,22 @@ def sts_online_trees(env, outdir, c):
 
 @target_with_env()
 def sts_consensus(env, outdir, c):
+    #return [env.Command('$OUTDIR/' + stripext(str(t)) + '.sum.tre',
+                        #t,
+                        #'sumtrees.py --weighted-trees $SOURCE > $TARGET')[0] for t in c['sts_online_trees']]
     return [env.Command('$OUTDIR/' + stripext(str(t)) + '.sum.tre',
                         t,
-                        'sumtrees.py --weighted-trees $SOURCE > $TARGET')[0] for t in c['sts_online_trees']]
+                        'sumtrees.py $SOURCE > $TARGET')[0] for t in c['sts_online_trees']]
 
 @target_with_env()
 def consensus_comparison(env, outdir, c):
-    sources = [c['tree']] + list(c['sts_consensus']) + c['full_mrbayes_consensus']
+    sources = [c['phyml_tree']] + list(c['sts_consensus']) + c['full_mrbayes_consensus']
     return env.Local('$OUTDIR/consensus_to_source.csv',
             sources,
             'compare_to_source.py $SOURCES -o $TARGET --schema nexus')
 
 w.add_controls(env)
 
-#@target_with_env()
-#def lnl_comparison(env, outdir, c):
-    #return env.Local('$OUTDIR/${trim_base}_lnl_comp.pdf',
-                     #env.Flatten([c['sts_online'], c['full_mrbayes_trees'][2:]]),
-                     #'lnl_compare.R $SOURCES $TARGET')[0]
-
-
-#@target_with_env()
-#def compare_trees(env, outdir, c):
-    #j = joiner(outdir)
-    #all_trees = list(c['sts_online_trees']) + c['full_mrbayes_newick']
-    #env.Command(j('comparisons.csv'),
-                #all_trees,
-                #'bin/trees_compare.py $SOURCES -o $TARGET')
-
-#nest.add('type', ('full', 'trimmed'))
-
-#@w.add_target()
-#def mrbayes_trees(outdir, c):
-    #j = joiner(outdir)
-    #targets = [j(stripext(str(c['nexus'])) + '.run{0}.t'.format(i)) for i in (1,2)]
-    #return env.SAlloc(targets, c['mrbayes_config'],
-            #'mpirun mb $SOURCE', 6)
-
-#@w.add_target()
-#def newick_trees(outdir, c):
-    #if c['type'] == 'full':
-        #r = [env.NexusToNewick(tree) for tree in c['mrbayes_trees']]
-    #else:
-        #j = joiner(outdir)
-        #r = []
-        #for tree in c['mrbayes_trees']:
-            #i, = env.Command(j(stripext(str(tree)) + '_online.nwk'),
-                    #[c['fasta'], tree],
-                    #'bin/sts-online $SOURCES -b 250 -p 3 -m 6 | cut -f 2 > $TARGET')
-            #r.append(i)
-    #c['compare_trees'][c['type']] = r
-    #return r
 
 #@w.add_target()
 #def natural_extension_result(outdir, c):
