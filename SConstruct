@@ -16,7 +16,7 @@ from SCons.Script import Builder
 def joiner(*args):
     return functools.partial(os.path.join, *args)
 
-trees = sorted(map(os.path.abspath, glob.glob('trees/*.nwk')))[:2]
+trees = sorted(map(os.path.abspath, glob.glob('trees/*.nwk')))
 
 env = SlurmEnvironment(ENV=os.environ.copy())
 env.PrependENVPath('PATH', './bin')
@@ -149,12 +149,12 @@ def sts_online_trees(env, outdir, c):
 
 @target_with_env()
 def sts_consensus(env, outdir, c):
-    #return [env.Command('$OUTDIR/' + stripext(str(t)) + '.sum.tre',
-                        #t,
-                        #'sumtrees.py --weighted-trees $SOURCE > $TARGET')[0] for t in c['sts_online_trees']]
     return [env.Command('$OUTDIR/' + stripext(str(t)) + '.sum.tre',
                         t,
-                        'sumtrees.py $SOURCE > $TARGET')[0] for t in c['sts_online_trees']]
+                        'sumtrees.py --weighted-trees $SOURCE > $TARGET')[0] for t in c['sts_online_trees']]
+    #return [env.Command('$OUTDIR/' + stripext(str(t)) + '.sum.tre',
+                        #t,
+                        #'sumtrees.py $SOURCE > $TARGET')[0] for t in c['sts_online_trees']]
 
 @target_with_env()
 def consensus_comparison(env, outdir, c):

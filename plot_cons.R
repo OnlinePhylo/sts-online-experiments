@@ -2,6 +2,7 @@
 library(ggplot2)
 
 theme_set(theme_bw(16))
+theme_update(legend.position='bottom')
 
 cons <- read.csv('consensus_to_source.csv', as.is=TRUE)
 cons <- transform(cons, tree=basename(tree),
