@@ -5,7 +5,7 @@ library(ape)
 set.seed(1)
 
 n_trees_per_taxon_count <- 2
-n_taxa <- c(10, 25, 50)
+n_taxa <- c(10, 25, 50, 5)
 
 r <- lapply(as.list(n_taxa), function(i) {
   lapply(as.list(1:n_trees_per_taxon_count), function(j) {

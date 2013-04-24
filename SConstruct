@@ -101,7 +101,7 @@ def trim_counts(c):
     n_taxa = c['n_taxa']
     half_n_taxa = n_taxa / 2
 
-    return [i for i in (1, 2, 5, 10) if i <= half_n_taxa]
+    return [i for i in (1, 2, 5, 10) if i <= half_n_taxa and n_taxa - i > 3]
 
 nest.add('trim_count', trim_counts)
 nest.add('keep_count', lambda c: [c['n_taxa'] - c['trim_count']],
