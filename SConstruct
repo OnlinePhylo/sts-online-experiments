@@ -20,6 +20,7 @@ trees = sorted(map(os.path.abspath, glob.glob('trees/*.nwk')))
 
 env = SlurmEnvironment(ENV=os.environ.copy())
 env.PrependENVPath('PATH', './bin')
+env['outdir'] = 'output'
 
 # Builders
 env['BUILDERS']['ConvertToNexus'] = Builder(action='seqmagick convert --alphabet dna --output-format nexus $SOURCE $TARGET', suffix='.nex', src_suffix='.fasta')
@@ -164,7 +165,16 @@ def consensus_comparison(env, outdir, c):
             'compare_to_source.py $SOURCES -o $TARGET --schema nexus')
 
 w.add_controls(env)
-
+controls = [i['control'] for _, i in nest]
+compare_to_source = env.Local('$outdir/compare_to_source.csv',
+        controls,
+        'nestagg delim -d $outdir consensus_to_source.csv '
+        '-k tree,n_taxa,trim_count,tree_moves,particle_factor > $TARGET')
+env.Depends(compare_to_source, [i['consensus_comparison'] for _, i in nest])
+env.Precious(compare_to_source)
+env.Local(['$outdir/compare_to_source.svg', '$outdir/compare_to_source_rf.svg'],
+        compare_to_source,
+        'plot_cons.R $SOURCE $TARGETS')
 
 #@w.add_target()
 #def natural_extension_result(outdir, c):

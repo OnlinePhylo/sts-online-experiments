@@ -1,10 +1,16 @@
 #!/usr/bin/env Rscript
 library(ggplot2)
 
+args <- commandArgs(TRUE)
+stopifnot(length(args) == 3)
+input <- args[1]
+out_l2 <- args[2]
+out_rf <- args[3]
+
 theme_set(theme_bw(16))
 theme_update(legend.position='bottom')
 
-cons <- read.csv('consensus_to_source.csv', as.is=TRUE)
+cons <- read.csv(input, as.is=TRUE)
 cons <- transform(cons, tree=basename(tree),
                   type=ifelse(grepl('output/[^/]+/[^/]+.sum.tre', query), 'MrBayes', 'sts-online'),
                   n_taxa_label=paste(n_taxa, 'taxa'),
@@ -18,7 +24,7 @@ p <- ggplot(cons, aes(x=ordered(particle_factor), y=euclidean_distance, color=ty
     geom_point(aes(shape=factor(tree_num))) +
     xlab("Particle Factor (x number of trees in posterior)") +
     ylab("Branch Length Distance (L2)")
-svg('consensus_to_source.svg', width=10, height=7)
+svg(out_l2, width=10, height=7)
 print(p)
 dev.off()
 
@@ -27,6 +33,6 @@ p <- ggplot(cons, aes(x=ordered(particle_factor), color=type, y=rf_distance)) +
     geom_point(aes(shape=factor(tree_num))) +
     xlab("Particle Factor (x number of trees in posterior)") +
     ylab("Robinson Foulds Distance")
-svg('consensus_to_source_rf.svg', width=10, height=7)
+svg(out_rf, width=10, height=7)
 print(p)
 dev.off()
