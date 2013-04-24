@@ -67,7 +67,7 @@ def full_phylip(env, outdir, c):
 def phyml_tree(env, outdir, c):
     return env.Command('${full_phylip}_phyml_tree.txt',
             ['$full_phylip', '$tree'],
-            'phyml -i ${SOURCES[0]} -u ${SOURCES[1]} -c 1 -m JC69 -o tl -b 0')[0]
+            'phyml -i ${SOURCES[0]} -u ${SOURCES[1]} -c 1 -m JC69 -o l -b 0')[0]
 
 @target_with_env()
 def full_nexus(env, outdir, c):
