@@ -12,13 +12,17 @@ begin mrbayes;
     lset nst=1 rates=equal;
     prset statefreqpr=fixed(equal);
     {extra}
-    mcmc nruns=2 nchains=3 ngen=5000000 samplefreq=5000 printfreq=50000 file={out_base};
+    mcmc nruns={nruns} nchains={nchains} ngen={length} samplefreq={samplefreq} printfreq={printfreq} file={out_base};
 end;
 """
 
 def main():
     p = argparse.ArgumentParser()
     p.add_argument('nexus_path')
+    mb_group = p.add_argument_group('mrbayes')
+    mb_group.add_argument('-l', '--length', type=int, default=1000000)
+    mb_group.add_argument('-r', '--runs', type=int, default=2)
+    mb_group.add_argument('-c', '--chains', type=int, default=3)
     p.add_argument('-o', '--outfile', type=argparse.FileType('w'), default=sys.stdout)
     a = p.parse_args()
 
@@ -31,7 +35,9 @@ def main():
   propset ExtSPR(Tau,V)$prob=0;
   propset ExtTBR(Tau,V)$prob=0;"""
 
-    t = TEMPLATE.format(nexus=a.nexus_path, out_base=base, extra=extra)
+    t = TEMPLATE.format(nexus=a.nexus_path, out_base=base, extra=extra, length=a.length,
+                        samplefreq=a.length // 1000, printfreq = a.length // 100,
+                        nruns=a.runs, nchains=a.chains)
     with a.outfile as fp:
         fp.write(t)
 

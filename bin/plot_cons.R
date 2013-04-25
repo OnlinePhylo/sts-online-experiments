@@ -1,5 +1,7 @@
 #!/usr/bin/env Rscript
 library(ggplot2)
+library(plyr)
+library(reshape2)
 
 args <- commandArgs(TRUE)
 stopifnot(length(args) == 3)
@@ -7,7 +9,7 @@ input <- args[1]
 out_l2 <- args[2]
 out_rf <- args[3]
 
-theme_set(theme_bw(16))
+theme_set(theme_bw(base_size=16))
 theme_update(legend.position='bottom')
 
 cons <- read.csv(input, as.is=TRUE)
@@ -19,20 +21,26 @@ cons <- transform(cons, tree=basename(tree),
 cons <- subset(cons, type != 'MrBayes' | particle_factor == 1)
 cons <- transform(cons, particle_factor=ifelse(type == 'MrBayes', 0, particle_factor))
 
-p <- ggplot(cons, aes(x=ordered(particle_factor), y=euclidean_distance, color=type)) +
-    facet_grid(n_taxa_label~trim_count_label, scales='free_y') +
-    geom_point(aes(shape=factor(tree_num))) +
-    xlab("Particle Factor (x number of trees in posterior)") +
-    ylab("Branch Length Distance (L2)")
-svg(out_l2, width=10, height=7)
-print(p)
-dev.off()
+m <- melt(cons, measure.vars=c('euclidean_distance', 'rf_distance'))
 
-p <- ggplot(cons, aes(x=ordered(particle_factor), color=type, y=rf_distance)) +
-    facet_grid(n_taxa_label~trim_count_label, scales='free_y') +
-    geom_point(aes(shape=factor(tree_num))) +
-    xlab("Particle Factor (x number of trees in posterior)") +
-    ylab("Robinson Foulds Distance")
-svg(out_rf, width=10, height=7)
-print(p)
-dev.off()
+y_labels <- data.frame(variable=c('euclidean_distance', 'rf_distance'),
+                       label=c('Branch Length Distance (L2)', 'RF Distance'),
+                       path=c(out_l2, out_rf))
+
+d_ply(m, .(variable), function(piece) {
+   s <- ddply(piece, .(particle_factor, tree_num, n_taxa_label, type, trim_taxon), function(p) {
+      with(p, data.frame(min_value=min(value), max_value=max(value), median_value=median(value)))
+   })
+
+   m <- y_labels[match(piece$variable[1], y_labels$variable),]
+   p <- ggplot(s, aes(x=ordered(particle_factor), y=median_value, ymin=min_value, ymax=max_value, color=type)) +
+     facet_grid(tree_num~n_taxa_label, scales='free_y') +
+     geom_pointrange(position=position_jitter()) +
+     geom_text(aes(label=trim_taxon), color='black', position='jitter') +
+     xlab("Particle Factor (x number of trees in posterior)") +
+     ylab(m$label)
+   message(m$path)
+   svg(as.character(m$path), width=5, height=11)
+   print(p)
+   dev.off()
+})

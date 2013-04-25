@@ -26,7 +26,7 @@ env['outdir'] = 'output'
 env['BUILDERS']['ConvertToNexus'] = Builder(action='seqmagick convert --alphabet dna --output-format nexus $SOURCE $TARGET', suffix='.nex', src_suffix='.fasta')
 env['BUILDERS']['ConvertToPhyx'] = Builder(action='seqmagick convert $SOURCE $TARGET', suffix='.phyx', src_suffix='.fasta')
 env['BUILDERS']['NexusToNewick'] = Builder(action='nexus_to_newick.py $SOURCE $TARGET -b 250', suffix='.nwk', src_suffix='.t')
-env['BUILDERS']['MrBayesConf'] = Builder(action='generate_mb.py $SOURCE -o $TARGET', suffix='.mb', src_suffix='.nex')
+env['BUILDERS']['MrBayesConf'] = Builder(action='generate_mb.py -r 4 -c 3 $SOURCE -o $TARGET', suffix='.mb', src_suffix='.nex')
 env['BUILDERS']['StsTrees'] = Builder(action='sts_to_nexus.py < $SOURCE > $TARGET', suffix='.trees', src_suffix='.sts')
 env['BUILDERS']['StsLikes'] = Builder(action='cut -f 1 $SOURCE > $TARGET', suffix='.txt', src_suffix='.sts')
 # End builders
@@ -86,7 +86,7 @@ def full_mrbayes_trees(env, outdir, c):
     targets = [j('{0}.run{1}.{2}'.format(stripext(str(c['full_nexus'])), i, t))
                for t in ('t', 'p')
                for i in (1, 2)]
-    return env.SAlloc(targets, c['full_mrbayes_config'], 'mpirun mb $SOURCE', 6)
+    return env.SAlloc(targets, c['full_mrbayes_config'], 'mpirun mb $SOURCE', 12)
 
 @target_with_env()
 def full_mrbayes_newick(env, outdir, c):
@@ -98,24 +98,27 @@ def full_mrbayes_consensus(env, outdir, c):
                         t,
                         'sumtrees.py -b 250 $SOURCE > $TARGET')[0] for t in c['full_mrbayes_trees'][:2]]
 
-def trim_counts(c):
-    n_taxa = c['n_taxa']
-    half_n_taxa = n_taxa / 2
+nest.add('trim_replicates', [5], create_dir=False)
+nest.add('trim_count', [1], create_dir=False)
 
-    return [i for i in (1, 2, 5, 10) if i <= half_n_taxa and n_taxa - i > 3]
+def trim_taxon(c):
+    assert c['trim_count'] == 1
+    all_taxa = ['t{0}'.format(i) for i in xrange(c['n_taxa'])]
+    return all_taxa[:c['trim_replicates']]
 
-nest.add('trim_count', trim_counts)
 nest.add('keep_count', lambda c: [c['n_taxa'] - c['trim_count']],
          create_dir=False)
 
-nest.add('trim_base', lambda c: ['{n_taxa}tax_trim{trim_count}'.format(**c)],
+nest.add('trim_taxon', trim_taxon)
+
+nest.add('trim_base', lambda c: ['{n_taxa:02d}tax_trim_$trim_taxon'.format(**c)],
          create_dir=False)
 
 @target_with_env()
 def trimmed_nexus(env, outdir, c):
     return env.Local('$OUTDIR/${trim_base}.nex',
             '$full_nexus',
-            'seqmagick convert --head $keep_count --input-format '
+            "seqmagick convert --pattern-exclude '^($trim_taxon)$'  --input-format "
             'nexus --alphabet dna $SOURCE $TARGET')[0]
 
 @target_with_env()
@@ -134,7 +137,7 @@ def trimmed_mrbayes_trees(env, outdir, c):
 #nest.add('tree_moves', (0, 5, 10))
 nest.add('tree_moves', [0])
 
-nest.add('particle_factor', [1, 2, 5, 10])
+nest.add('particle_factor', [1, 5, 10])
 
 @target_with_env()
 def sts_online(env, outdir, c):
@@ -152,7 +155,7 @@ def sts_online_trees(env, outdir, c):
 def sts_consensus(env, outdir, c):
     return [env.Command('$OUTDIR/' + stripext(str(t)) + '.sum.tre',
                         t,
-                        'sumtrees.py --weighted-trees $SOURCE > $TARGET')[0] for t in c['sts_online_trees']]
+                        'sumtrees.py -q --weighted-trees $SOURCE > $TARGET')[0] for t in c['sts_online_trees']]
     #return [env.Command('$OUTDIR/' + stripext(str(t)) + '.sum.tre',
                         #t,
                         #'sumtrees.py $SOURCE > $TARGET')[0] for t in c['sts_online_trees']]
@@ -169,27 +172,11 @@ controls = [i['control'] for _, i in nest]
 compare_to_source = env.Local('$outdir/compare_to_source.csv',
         controls,
         'nestagg delim -d $outdir consensus_to_source.csv '
-        '-k tree,n_taxa,trim_count,tree_moves,particle_factor > $TARGET')
+        '-k tree,n_taxa,trim_count,tree_moves,particle_factor,trim_taxon > $TARGET')
 env.Depends(compare_to_source, [i['consensus_comparison'] for _, i in nest])
 env.Precious(compare_to_source)
 env.Local(['$outdir/compare_to_source.svg', '$outdir/compare_to_source_rf.svg'],
         compare_to_source,
         'plot_cons.R $SOURCE $TARGETS')
-
-#@w.add_target()
-#def natural_extension_result(outdir, c):
-    #if c['type'] != 'full':
-        #return None
-
-    #tree = c['mrbayes_trees'][0]
-    #res, = env.Command(joiner(outdir)(stripext(str(tree)) + '_natext.csv'),
-        #[natural_extension, c['fasta'], tree],
-        #'${SOURCES[0]} '
-        #'input.sequence.file=${SOURCES[1]} '
-        #'natural_extension.trees_nexus=${SOURCES[2]} '
-        #'natural_extension.burnin=250 '
-        #'natural_extension.prune_taxon=t1 '
-        #'natural_extension.output_path=$TARGET')
-    #env.Depends(res, 'src/natural_extension')
 
 w.finalize_all_aggregates()
