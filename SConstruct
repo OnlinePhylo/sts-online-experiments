@@ -22,11 +22,13 @@ env = SlurmEnvironment(ENV=os.environ.copy())
 env.PrependENVPath('PATH', './bin')
 env['outdir'] = 'output'
 
+env['MB_NRUNS'] = 4
+
 # Builders
 env['BUILDERS']['ConvertToNexus'] = Builder(action='seqmagick convert --alphabet dna --output-format nexus $SOURCE $TARGET', suffix='.nex', src_suffix='.fasta')
 env['BUILDERS']['ConvertToPhyx'] = Builder(action='seqmagick convert $SOURCE $TARGET', suffix='.phyx', src_suffix='.fasta')
 env['BUILDERS']['NexusToNewick'] = Builder(action='nexus_to_newick.py $SOURCE $TARGET -b 250', suffix='.nwk', src_suffix='.t')
-env['BUILDERS']['MrBayesConf'] = Builder(action='generate_mb.py -r 4 -c 3 $SOURCE -o $TARGET', suffix='.mb', src_suffix='.nex')
+env['BUILDERS']['MrBayesConf'] = Builder(action='generate_mb.py --runs $MB_NRUNS --chains 3 --length 2000000 $SOURCE -o $TARGET', suffix='.mb', src_suffix='.nex')
 env['BUILDERS']['StsTrees'] = Builder(action='sts_to_nexus.py < $SOURCE > $TARGET', suffix='.trees', src_suffix='.sts')
 env['BUILDERS']['StsLikes'] = Builder(action='cut -f 1 $SOURCE > $TARGET', suffix='.txt', src_suffix='.sts')
 # End builders
@@ -85,25 +87,27 @@ def full_mrbayes_trees(env, outdir, c):
     j = joiner(outdir)
     targets = [j('{0}.run{1}.{2}'.format(stripext(str(c['full_nexus'])), i, t))
                for t in ('t', 'p')
-               for i in (1, 2)]
-    return env.SAlloc(targets, c['full_mrbayes_config'], 'mpirun mb $SOURCE', 12)
+               for i in xrange(1, env['MB_NRUNS'] + 1)]
+    res = env.SAlloc(targets, c['full_mrbayes_config'], 'mpirun mb $SOURCE', 12)
+    return {'trees': res[:env['MB_NRUNS']],
+            'params': res[env['MB_NRUNS']:]}
 
 @target_with_env()
 def full_mrbayes_newick(env, outdir, c):
-    return [env.NexusToNewick(t)[0] for t in c['full_mrbayes_trees'][:2]]
+    return [env.NexusToNewick(t)[0] for t in c['full_mrbayes_trees']['trees']]
 
 @target_with_env()
 def full_mrbayes_consensus(env, outdir, c):
     return [env.Command('$OUTDIR/' + stripext(str(t)) + '.sum.tre',
                         t,
-                        'sumtrees.py -b 250 $SOURCE > $TARGET')[0] for t in c['full_mrbayes_trees'][:2]]
+                        'sumtrees.py -b 250 $SOURCE > $TARGET')[0] for t in c['full_mrbayes_trees']['trees']]
 
 nest.add('trim_replicates', [5], create_dir=False)
 nest.add('trim_count', [1], create_dir=False)
 
 def trim_taxon(c):
     assert c['trim_count'] == 1
-    all_taxa = ['t{0}'.format(i) for i in xrange(c['n_taxa'])]
+    all_taxa = ['t{0}'.format(i+1) for i in xrange(c['n_taxa'])]
     return all_taxa[:c['trim_replicates']]
 
 nest.add('keep_count', lambda c: [c['n_taxa'] - c['trim_count']],
@@ -129,10 +133,12 @@ def trimmed_mrbayes_config(env, outdir, c):
 def trimmed_mrbayes_trees(env, outdir, c):
     targets = ['$OUTDIR/${{trim_base}}.run{0}.{1}'.format(i, j)
                for j in ('t', 'p')
-               for i in (1, 2)]
-    return env.SAlloc(targets,
+               for i in xrange(1, env['MB_NRUNS'] + 1)]
+    res = env.SAlloc(targets,
                       ['$trimmed_mrbayes_config', '$trimmed_nexus'],
                       'mpirun mb $SOURCE', 6)
+    return {'trees': res[:env['MB_NRUNS']],
+            'params': res[env['MB_NRUNS']:]}
 
 #nest.add('tree_moves', (0, 5, 10))
 nest.add('tree_moves', [0])
@@ -145,7 +151,7 @@ def sts_online(env, outdir, c):
     return [env.Command(j(stripext(str(treefile)) + '.sts'),
                         ['$fasta', treefile],
                         'sts-online -p $particle_factor -b 250 --tree-moves $tree_moves $SOURCES > $TARGET')[0]
-            for treefile in c['trimmed_mrbayes_trees'][:2]]
+            for treefile in c['trimmed_mrbayes_trees']['trees']]
 
 @target_with_env()
 def sts_online_trees(env, outdir, c):

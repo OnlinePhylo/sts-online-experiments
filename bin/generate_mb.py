@@ -12,7 +12,8 @@ begin mrbayes;
     lset nst=1 rates=equal;
     prset statefreqpr=fixed(equal);
     {extra}
-    mcmc nruns={nruns} nchains={nchains} ngen={length} samplefreq={samplefreq} printfreq={printfreq} file={out_base};
+    mcmcp nruns={nruns} nchains={nchains} ngen={length} samplefreq={samplefreq} printfreq={printfreq} file={out_base} diagnfreq={printfreq};
+    mcmc;
 end;
 """
 
