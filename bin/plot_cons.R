@@ -29,18 +29,17 @@ y_labels <- data.frame(variable=c('euclidean_distance', 'rf_distance'),
 
 d_ply(m, .(variable), function(piece) {
    s <- ddply(piece, .(particle_factor, tree_num, n_taxa_label, type, trim_taxon), function(p) {
-      with(p, data.frame(min_value=min(value), max_value=max(value), median_value=median(value)))
+      with(p, data.frame(q25=quantile(value, 0.25), min_value=min(value), max_value=max(value), median_value=median(value), q75=quantile(value, 0.75)))
    })
 
    m <- y_labels[match(piece$variable[1], y_labels$variable),]
-   p <- ggplot(s, aes(x=ordered(particle_factor), y=median_value, ymin=min_value, ymax=max_value, color=type)) +
+   p <- ggplot(s, aes(x=ordered(particle_factor), y=median_value, ymin=q25, ymax=q75, color=type)) +
      facet_grid(tree_num~n_taxa_label, scales='free_y') +
      geom_pointrange(position=position_jitter()) +
-     geom_text(aes(label=trim_taxon), color='black', position='jitter') +
      xlab("Particle Factor (x number of trees in posterior)") +
      ylab(m$label)
    message(m$path)
-   svg(as.character(m$path), width=5, height=11)
+   svg(as.character(m$path), width=6, height=11)
    print(p)
    dev.off()
 })

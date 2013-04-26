@@ -29,7 +29,7 @@ env['BUILDERS']['ConvertToNexus'] = Builder(action='seqmagick convert --alphabet
 env['BUILDERS']['ConvertToPhyx'] = Builder(action='seqmagick convert $SOURCE $TARGET', suffix='.phyx', src_suffix='.fasta')
 env['BUILDERS']['NexusToNewick'] = Builder(action='nexus_to_newick.py $SOURCE $TARGET -b 250', suffix='.nwk', src_suffix='.t')
 env['BUILDERS']['MrBayesConf'] = Builder(action='generate_mb.py --runs $MB_NRUNS --chains 3 --length 2000000 $SOURCE -o $TARGET', suffix='.mb', src_suffix='.nex')
-env['BUILDERS']['StsTrees'] = Builder(action='sts_to_nexus.py < $SOURCE > $TARGET', suffix='.trees', src_suffix='.sts')
+env['BUILDERS']['StsTrees'] = Builder(action='sts_to_nexus.py -i $SOURCE -o $TARGET', suffix='.trees', src_suffix='.sts')
 env['BUILDERS']['StsLikes'] = Builder(action='cut -f 1 $SOURCE > $TARGET', suffix='.txt', src_suffix='.sts')
 # End builders
 
@@ -100,7 +100,7 @@ def full_mrbayes_newick(env, outdir, c):
 def full_mrbayes_consensus(env, outdir, c):
     return [env.Command('$OUTDIR/' + stripext(str(t)) + '.sum.tre',
                         t,
-                        'sumtrees.py -b 250 $SOURCE > $TARGET')[0] for t in c['full_mrbayes_trees']['trees']]
+                        'sumtrees.py -q -b 250 $SOURCE > $TARGET')[0] for t in c['full_mrbayes_trees']['trees']]
 
 nest.add('trim_replicates', [5], create_dir=False)
 nest.add('trim_count', [1], create_dir=False)
@@ -143,46 +143,54 @@ def trimmed_mrbayes_trees(env, outdir, c):
 #nest.add('tree_moves', (0, 5, 10))
 nest.add('tree_moves', [0])
 
-nest.add('particle_factor', [1, 5, 10])
+# nest.add('particle_factor', [1, 5, 10])
+nest.add('particle_factor', [1])
 
 @target_with_env()
 def sts_online(env, outdir, c):
     j = joiner(outdir)
-    return [env.Command(j(stripext(str(treefile)) + '.sts'),
+    return [env.Command(j(stripext(str(treefile)) + '.sts.json'),
                         ['$fasta', treefile],
-                        'sts-online -p $particle_factor -b 250 --tree-moves $tree_moves $SOURCES > $TARGET')[0]
+                        'sts-online -p $particle_factor -b 250 --tree-moves $tree_moves $SOURCES $TARGET')[0]
             for treefile in c['trimmed_mrbayes_trees']['trees']]
 
-@target_with_env()
-def sts_online_trees(env, outdir, c):
-    return [env.StsTrees(i) for i in c['sts_online']]
+#@target_with_env()
+#def sts_online_trees(env, outdir, c):
+    #return [env.StsTrees(i) for i in c['sts_online']]
 
-@target_with_env()
-def sts_consensus(env, outdir, c):
-    return [env.Command('$OUTDIR/' + stripext(str(t)) + '.sum.tre',
-                        t,
-                        'sumtrees.py -q --weighted-trees $SOURCE > $TARGET')[0] for t in c['sts_online_trees']]
+#@target_with_env()
+#def sts_consensus(env, outdir, c):
     #return [env.Command('$OUTDIR/' + stripext(str(t)) + '.sum.tre',
                         #t,
-                        #'sumtrees.py $SOURCE > $TARGET')[0] for t in c['sts_online_trees']]
+                        #'sumtrees.py -q --weighted-trees $SOURCE > $TARGET')[0] for t in c['sts_online_trees']]
+    ##return [env.Command('$OUTDIR/' + stripext(str(t)) + '.sum.tre',
+                        ##t,
+                        ##'sumtrees.py $SOURCE > $TARGET')[0] for t in c['sts_online_trees']]
 
 @target_with_env()
-def consensus_comparison(env, outdir, c):
-    sources = [c['phyml_tree']] + list(c['sts_consensus']) + c['full_mrbayes_consensus']
-    return env.Local('$OUTDIR/consensus_to_source.csv',
+def posterior_comparison(env, outdir, c):
+    sources = [c['phyml_tree']] + list(c['sts_online']) + c['full_mrbayes_trees']['trees']
+    return env.Local('$OUTDIR/posterior_comparison.csv',
             sources,
-            'compare_to_source.py $SOURCES -o $TARGET --schema nexus')
+            'compare_posterior_topologies.py --nexus-burnin 250 $SOURCES -o $TARGET')
+
+#@target_with_env()
+#def consensus_comparison(env, outdir, c):
+    #sources = [c['phyml_tree']] + list(c['sts_consensus']) + c['full_mrbayes_consensus']
+    #return env.Local('$OUTDIR/consensus_to_source.csv',
+            #sources,
+            #'compare_to_source.py $SOURCES -o $TARGET --schema nexus')
 
 w.add_controls(env)
 controls = [i['control'] for _, i in nest]
-compare_to_source = env.Local('$outdir/compare_to_source.csv',
-        controls,
-        'nestagg delim -d $outdir consensus_to_source.csv '
-        '-k tree,n_taxa,trim_count,tree_moves,particle_factor,trim_taxon > $TARGET')
-env.Depends(compare_to_source, [i['consensus_comparison'] for _, i in nest])
-env.Precious(compare_to_source)
-env.Local(['$outdir/compare_to_source.svg', '$outdir/compare_to_source_rf.svg'],
-        compare_to_source,
-        'plot_cons.R $SOURCE $TARGETS')
+#compare_to_source = env.Local('$outdir/compare_to_source.csv',
+        #controls,
+        #'nestagg delim -d $outdir consensus_to_source.csv '
+        #'-k tree,n_taxa,trim_count,tree_moves,particle_factor,trim_taxon > $TARGET')
+#env.Depends(compare_to_source, [i['consensus_comparison'] for _, i in nest])
+#env.Precious(compare_to_source)
+#env.Local(['$outdir/compare_to_source.svg', '$outdir/compare_to_source_rf.svg'],
+        #compare_to_source,
+        #'plot_cons.R $SOURCE $TARGETS')
 
 w.finalize_all_aggregates()

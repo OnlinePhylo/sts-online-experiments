@@ -12,7 +12,6 @@ import sys
 
 import dendropy
 from dendropy.treecalc import euclidean_distance, symmetric_difference, robinson_foulds_distance
-from dendropy import treesum,  treesplit
 
 def compute_expectation(fn, trees):
     """
