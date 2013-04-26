@@ -40,6 +40,10 @@ w = SConsWrap(nest, dest_dir='output')
 
 target_with_env = functools.partial(w.add_target_with_env, environment=env)
 
+# Aggregate
+posterior_comparisons = []
+posterior_comparisons_keys = ('tree', 'n_taxa', 'trim_taxon', 'particle_factor', 'tree_moves')
+
 nest.add('tree', trees, label_func=stripext)
 def get_n_taxa(c):
     m = re.search(r'(\d+)taxon-.*', c['tree'])
@@ -89,8 +93,18 @@ def full_mrbayes_trees(env, outdir, c):
                for t in ('t', 'p')
                for i in xrange(1, env['MB_NRUNS'] + 1)]
     res = env.SAlloc(targets, c['full_mrbayes_config'], 'mpirun mb $SOURCE', 12)
-    return {'trees': res[:env['MB_NRUNS']],
-            'params': res[env['MB_NRUNS']:]}
+    res = {'trees': res[:env['MB_NRUNS']],
+           'params': res[env['MB_NRUNS']:]}
+    j = joiner(outdir)
+    env['kvs'] = ' '.join('{0}="{1}"'.format(k, c.get(k, '')) for k in posterior_comparisons_keys)
+
+    pc = [env.Local(j(stripext(str(t)) + '.comp.csv'),
+                    [c['phyml_tree'], t],
+                    'compare_posterior_topologies.py $SOURCES | decorate_csv.py $kvs type=MrBayes > $TARGET')
+            for t in res['trees']]
+    posterior_comparisons.extend(pc)
+
+    return res
 
 @target_with_env()
 def full_mrbayes_newick(env, outdir, c):
@@ -168,11 +182,16 @@ def sts_online(env, outdir, c):
                         ##'sumtrees.py $SOURCE > $TARGET')[0] for t in c['sts_online_trees']]
 
 @target_with_env()
-def posterior_comparison(env, outdir, c):
-    sources = [c['phyml_tree']] + list(c['sts_online']) + c['full_mrbayes_trees']['trees']
-    return env.Local('$OUTDIR/posterior_comparison.csv',
-            sources,
-            'compare_posterior_topologies.py --nexus-burnin 250 $SOURCES -o $TARGET')
+def sts_posterior_comparison(env, outdir, c):
+    j = joiner(outdir)
+    env['kvs'] = ' '.join('{0}="{1}"'.format(k, c.get(k, '')) for k in posterior_comparisons_keys)
+
+    res = [env.Local(j(stripext(str(t)) + '.comp.csv'),
+                     [c['phyml_tree'], t],
+                     'compare_posterior_topologies.py $SOURCES | decorate_csv.py $kvs type=sts-online > $TARGET')
+            for t in c['sts_online']]
+    posterior_comparisons.extend(res)
+    return res
 
 #@target_with_env()
 #def consensus_comparison(env, outdir, c):
@@ -181,16 +200,11 @@ def posterior_comparison(env, outdir, c):
             #sources,
             #'compare_to_source.py $SOURCES -o $TARGET --schema nexus')
 
-w.add_controls(env)
-controls = [i['control'] for _, i in nest]
-#compare_to_source = env.Local('$outdir/compare_to_source.csv',
-        #controls,
-        #'nestagg delim -d $outdir consensus_to_source.csv '
-        #'-k tree,n_taxa,trim_count,tree_moves,particle_factor,trim_taxon > $TARGET')
-#env.Depends(compare_to_source, [i['consensus_comparison'] for _, i in nest])
+all_posterior_comparison = env.Local('$outdir/posterior_comparison.csv',
+        posterior_comparisons, 'csvstack $SOURCES > $TARGET')
+all_posterior_plot = env.Local('$outdir/posterior_comparison.svg',
+        all_posterior_comparison, 'plot_posterior_rf.R $SOURCE $TARGET')
 #env.Precious(compare_to_source)
 #env.Local(['$outdir/compare_to_source.svg', '$outdir/compare_to_source_rf.svg'],
         #compare_to_source,
         #'plot_cons.R $SOURCE $TARGETS')
-
-w.finalize_all_aggregates()
