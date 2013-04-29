@@ -7,6 +7,8 @@ stopifnot(length(args) == 2)
 pc <- read.csv(args[1], as.is=TRUE)
 pc <- transform(pc, tree=sub('\\.nwk$', '', basename(tree)))
 
+print(aggregate(rf_distance~file, pc, length))
+
 p <- ggplot(pc, aes(x=trim_taxon, y=rf_distance, fill=type)) +
     geom_boxplot() +
     facet_wrap(~tree, ncol=1) +

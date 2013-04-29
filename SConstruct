@@ -16,7 +16,7 @@ from SCons.Script import Builder
 def joiner(*args):
     return functools.partial(os.path.join, *args)
 
-trees = sorted(map(os.path.abspath, glob.glob('trees/*.nwk')))
+trees = sorted(map(os.path.abspath, glob.glob('trees/50*.nwk')))
 
 env = SlurmEnvironment(ENV=os.environ.copy())
 env.PrependENVPath('PATH', './bin')
@@ -28,7 +28,7 @@ env['MB_NRUNS'] = 4
 env['BUILDERS']['ConvertToNexus'] = Builder(action='seqmagick convert --alphabet dna --output-format nexus $SOURCE $TARGET', suffix='.nex', src_suffix='.fasta')
 env['BUILDERS']['ConvertToPhyx'] = Builder(action='seqmagick convert $SOURCE $TARGET', suffix='.phyx', src_suffix='.fasta')
 env['BUILDERS']['NexusToNewick'] = Builder(action='nexus_to_newick.py $SOURCE $TARGET -b 250', suffix='.nwk', src_suffix='.t')
-env['BUILDERS']['MrBayesConf'] = Builder(action='generate_mb.py --runs $MB_NRUNS --chains 3 --length 2000000 $SOURCE -o $TARGET', suffix='.mb', src_suffix='.nex')
+env['BUILDERS']['MrBayesConf'] = Builder(action='generate_mb.py --runs $MB_NRUNS --chains 1 --length 10000000 $SOURCE -o $TARGET', suffix='.mb', src_suffix='.nex')
 env['BUILDERS']['StsTrees'] = Builder(action='sts_to_nexus.py -i $SOURCE -o $TARGET', suffix='.trees', src_suffix='.sts')
 env['BUILDERS']['StsLikes'] = Builder(action='cut -f 1 $SOURCE > $TARGET', suffix='.txt', src_suffix='.sts')
 # End builders
@@ -45,11 +45,19 @@ posterior_comparisons = []
 posterior_comparisons_keys = ('tree', 'n_taxa', 'trim_taxon', 'particle_factor', 'tree_moves')
 
 nest.add('tree', trees, label_func=stripext)
+
+
 def get_n_taxa(c):
     m = re.search(r'(\d+)taxon-.*', c['tree'])
     assert m
     return [int(m.group(1))]
 nest.add('n_taxa', get_n_taxa, create_dir=False)
+
+@w.add_aggregate(list)
+def pendant_bl(outdir, c, inputs):
+    env.Local(os.path.join(outdir, 'pendant_bl_ess.csv'),
+            env.Flatten([c['tree'], inputs]),
+            'pendant_bl.py $SOURCES -o $TARGET')
 
 @target_with_env()
 def fasta(env, outdir, c):
@@ -92,7 +100,7 @@ def full_mrbayes_trees(env, outdir, c):
     targets = [j('{0}.run{1}.{2}'.format(stripext(str(c['full_nexus'])), i, t))
                for t in ('t', 'p')
                for i in xrange(1, env['MB_NRUNS'] + 1)]
-    res = env.SAlloc(targets, c['full_mrbayes_config'], 'mpirun mb $SOURCE', 12)
+    res = env.SAlloc(targets, c['full_mrbayes_config'], 'mpirun mb $SOURCE', 4)
     res = {'trees': res[:env['MB_NRUNS']],
            'params': res[env['MB_NRUNS']:]}
     j = joiner(outdir)
@@ -100,7 +108,7 @@ def full_mrbayes_trees(env, outdir, c):
 
     pc = [env.Local(j(stripext(str(t)) + '.comp.csv'),
                     [c['phyml_tree'], t],
-                    'compare_posterior_topologies.py $SOURCES | decorate_csv.py $kvs type=MrBayes > $TARGET')
+                    'compare_posterior_topologies.py -b 250 $SOURCES | decorate_csv.py $kvs type=MrBayes > $TARGET')
             for t in res['trees']]
     posterior_comparisons.extend(pc)
 
@@ -150,7 +158,7 @@ def trimmed_mrbayes_trees(env, outdir, c):
                for i in xrange(1, env['MB_NRUNS'] + 1)]
     res = env.SAlloc(targets,
                       ['$trimmed_mrbayes_config', '$trimmed_nexus'],
-                      'mpirun mb $SOURCE', 6)
+                      'mpirun mb $SOURCE', 4)
     return {'trees': res[:env['MB_NRUNS']],
             'params': res[env['MB_NRUNS']:]}
 
@@ -163,10 +171,12 @@ nest.add('particle_factor', [1])
 @target_with_env()
 def sts_online(env, outdir, c):
     j = joiner(outdir)
-    return [env.Command(j(stripext(str(treefile)) + '.sts.json'),
-                        ['$fasta', treefile],
-                        'sts-online -p $particle_factor -b 250 --tree-moves $tree_moves $SOURCES $TARGET')[0]
+    result = [env.Command(j(stripext(str(treefile)) + '.sts.json'),
+                          ['$fasta', treefile],
+                          'sts-online -p $particle_factor -b 250 --tree-moves $tree_moves $SOURCES $TARGET')[0]
             for treefile in c['trimmed_mrbayes_trees']['trees']]
+    c['pendant_bl'].extend(result)
+    return result
 
 #@target_with_env()
 #def sts_online_trees(env, outdir, c):
@@ -208,3 +218,4 @@ all_posterior_plot = env.Local('$outdir/posterior_comparison.svg',
 #env.Local(['$outdir/compare_to_source.svg', '$outdir/compare_to_source_rf.svg'],
         #compare_to_source,
         #'plot_cons.R $SOURCE $TARGETS')
+w.finalize_all_aggregates()
