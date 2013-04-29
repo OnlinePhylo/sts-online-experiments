@@ -178,19 +178,6 @@ def sts_online(env, outdir, c):
     c['pendant_bl'].extend(result)
     return result
 
-#@target_with_env()
-#def sts_online_trees(env, outdir, c):
-    #return [env.StsTrees(i) for i in c['sts_online']]
-
-#@target_with_env()
-#def sts_consensus(env, outdir, c):
-    #return [env.Command('$OUTDIR/' + stripext(str(t)) + '.sum.tre',
-                        #t,
-                        #'sumtrees.py -q --weighted-trees $SOURCE > $TARGET')[0] for t in c['sts_online_trees']]
-    ##return [env.Command('$OUTDIR/' + stripext(str(t)) + '.sum.tre',
-                        ##t,
-                        ##'sumtrees.py $SOURCE > $TARGET')[0] for t in c['sts_online_trees']]
-
 @target_with_env()
 def sts_posterior_comparison(env, outdir, c):
     j = joiner(outdir)
@@ -203,19 +190,7 @@ def sts_posterior_comparison(env, outdir, c):
     posterior_comparisons.extend(res)
     return res
 
-#@target_with_env()
-#def consensus_comparison(env, outdir, c):
-    #sources = [c['phyml_tree']] + list(c['sts_consensus']) + c['full_mrbayes_consensus']
-    #return env.Local('$OUTDIR/consensus_to_source.csv',
-            #sources,
-            #'compare_to_source.py $SOURCES -o $TARGET --schema nexus')
-
 all_posterior_comparison = env.Local('$outdir/posterior_comparison.csv',
         posterior_comparisons, 'csvstack $SOURCES > $TARGET')
 all_posterior_plot = env.Local('$outdir/posterior_comparison.svg',
         all_posterior_comparison, 'plot_posterior_rf.R $SOURCE $TARGET')
-#env.Precious(compare_to_source)
-#env.Local(['$outdir/compare_to_source.svg', '$outdir/compare_to_source_rf.svg'],
-        #compare_to_source,
-        #'plot_cons.R $SOURCE $TARGETS')
-w.finalize_all_aggregates()
