@@ -18,7 +18,7 @@ def main():
 
     with a.output as ofp:
         w = csv.writer(ofp, lineterminator='\n')
-        w.writerow(['tree', 'posterior', 'generation', 'pruned_taxon', 'pendant_bl', 'ess'])
+        w.writerow(['tree', 'posterior', 'generation', 'pruned_taxon', 'pendant_bl', 'prox_bl', 'dist_bl', 'ess'])
         for f in a.sts_json:
             with argparse.FileType('r')(f) as fp:
                 sts_json = json.load(fp)
@@ -27,7 +27,11 @@ def main():
                     sequence = g['sequence']
                     ess = g['ess']
                     node = ref_tree.find_node_with_taxon_label(sequence)
-                    w.writerow([a.ref_tree, f, i, sequence, node.edge_length, ess])
+
+                    parent = node.parent_node
+                    sibling = next((n for n in parent.child_nodes() if n != node), None)
+
+                    w.writerow([a.ref_tree, f, i, sequence, node.edge_length, parent.edge_length, sibling.edge_length, ess])
 
 if __name__ == '__main__':
     main()

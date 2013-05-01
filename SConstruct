@@ -194,3 +194,5 @@ all_posterior_comparison = env.Local('$outdir/posterior_comparison.csv',
         posterior_comparisons, 'csvstack $SOURCES > $TARGET')
 all_posterior_plot = env.Local('$outdir/posterior_comparison.svg',
         all_posterior_comparison, 'plot_posterior_rf.R $SOURCE $TARGET')
+
+w.finalize_all_aggregates()
