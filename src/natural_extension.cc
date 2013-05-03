@@ -13,6 +13,7 @@
 #include <cassert>
 #include <iterator>
 #include <iostream>
+#include <iomanip>
 #include <memory>
 #include <random>
 #include <stdexcept>
@@ -275,6 +276,8 @@ int run_main(int argc, char**argv)
     // Taxon to remove
     std::string prune_taxon_name = bpp::ApplicationTools::getAFilePath("natural_extension.prune_taxon", params, true, false);
 
+    bool quiet = bpp::ApplicationTools::getBooleanParameter("natural_extension.quiet", params, false);
+
     ofstream output_fp(output_path);
 
     Exponential_branch_prior forest_prior{exp_mean};
@@ -282,7 +285,7 @@ int run_main(int argc, char**argv)
     cerr << "Read " << trees.size() << " trees." << endl;
 
     size_t i = 0;
-    output_fp << "index,forest_length,orig_likelihood,likelihood,prior,posterior" << endl;
+    output_fp << "index,forest_length,orig_likelihood,orig_prior,orig_posterior,likelihood,prior,posterior" << endl;
 
     for(unique_ptr<bpp::Tree>& t : trees) {
         // Find leaf to remove
@@ -295,6 +298,7 @@ int run_main(int argc, char**argv)
         bpp::RHomogeneousTreeLikelihood orig_like(tree, *sites, model.get(), rate_dist.get(), true, false);
         orig_like.initialize();
         const double orig_fl = orig_like.getLogLikelihood();
+        const double orig_pr = forest_prior(v);
 
         auto it = std::find_if(std::begin(leaves), std::end(leaves),
                                [&prune_taxon_name](const bpp::Node* node) { return node->getName() == prune_taxon_name; });
@@ -307,7 +311,10 @@ int run_main(int argc, char**argv)
         double pr = forest_prior(v);
         double flen = forest_length(v);
 
-        output_fp << i++ << "," << flen << ',' << orig_fl << ',' << fl << "," << pr << "," << fl + pr << "\n";
+        output_fp << i++ << "," << flen << ',' << orig_fl << ',' << orig_pr << ',' << orig_pr + orig_fl << ','
+                  << fl << "," << pr << "," << fl + pr << "\n";
+        if(!quiet)
+            std::clog << "Tree " << std::setw(10) << i << '\r';
     }
 
     return 0;

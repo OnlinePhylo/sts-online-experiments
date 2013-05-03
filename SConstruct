@@ -22,13 +22,14 @@ env = SlurmEnvironment(ENV=os.environ.copy())
 env.PrependENVPath('PATH', './bin')
 env['outdir'] = 'output'
 
-env['MB_NRUNS'] = 4
+env['MB_NRUNS'] = 2
 
 # Builders
 env['BUILDERS']['ConvertToNexus'] = Builder(action='seqmagick convert --alphabet dna --output-format nexus $SOURCE $TARGET', suffix='.nex', src_suffix='.fasta')
 env['BUILDERS']['ConvertToPhyx'] = Builder(action='seqmagick convert $SOURCE $TARGET', suffix='.phyx', src_suffix='.fasta')
 env['BUILDERS']['NexusToNewick'] = Builder(action='nexus_to_newick.py $SOURCE $TARGET -b 250', suffix='.nwk', src_suffix='.t')
-env['BUILDERS']['MrBayesConf'] = Builder(action='generate_mb.py --runs $MB_NRUNS --chains 1 --length 10000000 $SOURCE -o $TARGET', suffix='.mb', src_suffix='.nex')
+env['BUILDERS']['MrBayesConf10'] = Builder(action='generate_mb.py --runs $MB_NRUNS --length 500000 $SOURCE -o $TARGET', suffix='.mb', src_suffix='.nex')
+env['BUILDERS']['MrBayesConf50'] = Builder(action='generate_mb.py --runs $MB_NRUNS --length 500000 $SOURCE -o $TARGET', suffix='.mb', src_suffix='.nex')
 env['BUILDERS']['StsTrees'] = Builder(action='sts_to_nexus.py -i $SOURCE -o $TARGET', suffix='.trees', src_suffix='.sts')
 env['BUILDERS']['StsLikes'] = Builder(action='cut -f 1 $SOURCE > $TARGET', suffix='.txt', src_suffix='.sts')
 # End builders
@@ -92,7 +93,12 @@ def full_nexus(env, outdir, c):
 
 @target_with_env()
 def full_mrbayes_config(env, outdir, c):
-    return env.MrBayesConf(c['full_nexus'])[0]
+    if c['n_taxa'] == 10:
+        return env.MrBayesConf10(c['full_nexus'])[0]
+    elif c['n_taxa'] == 50:
+        return env.MrBayesConf50(c['full_nexus'])[0]
+    else:
+        raise ValueError(n_taxa)
 
 @target_with_env()
 def full_mrbayes_trees(env, outdir, c):
@@ -149,16 +155,21 @@ def trimmed_nexus(env, outdir, c):
 
 @target_with_env()
 def trimmed_mrbayes_config(env, outdir, c):
-    return env.MrBayesConf(c['trimmed_nexus'])[0]
+    if c['n_taxa'] == 10:
+        return env.MrBayesConf10(c['trimmed_nexus'])[0]
+    elif c['n_taxa'] == 50:
+        return env.MrBayesConf50(c['trimmed_nexus'])[0]
+    else:
+        raise ValueError(n_taxa)
 
 @target_with_env()
 def trimmed_mrbayes_trees(env, outdir, c):
     targets = ['$OUTDIR/${{trim_base}}.run{0}.{1}'.format(i, j)
                for j in ('t', 'p')
                for i in xrange(1, env['MB_NRUNS'] + 1)]
-    res = env.SAlloc(targets,
-                      ['$trimmed_mrbayes_config', '$trimmed_nexus'],
-                      'mpirun mb $SOURCE', 4)
+    res = env.SRun(targets,
+                   ['$trimmed_mrbayes_config', '$trimmed_nexus'],
+                   'mb $SOURCE')
     return {'trees': res[:env['MB_NRUNS']],
             'params': res[env['MB_NRUNS']:]}
 
