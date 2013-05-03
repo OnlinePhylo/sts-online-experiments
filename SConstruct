@@ -16,7 +16,7 @@ from SCons.Script import Builder
 def joiner(*args):
     return functools.partial(os.path.join, *args)
 
-trees = sorted(map(os.path.abspath, glob.glob('trees/50*.nwk')))
+trees = sorted(map(os.path.abspath, glob.glob('trees/*.nwk')))
 
 env = SlurmEnvironment(ENV=os.environ.copy())
 env.PrependENVPath('PATH', './bin')
@@ -100,7 +100,7 @@ def full_mrbayes_trees(env, outdir, c):
     targets = [j('{0}.run{1}.{2}'.format(stripext(str(c['full_nexus'])), i, t))
                for t in ('t', 'p')
                for i in xrange(1, env['MB_NRUNS'] + 1)]
-    res = env.SAlloc(targets, c['full_mrbayes_config'], 'mpirun mb $SOURCE', 4)
+    res = env.SRun(targets, c['full_mrbayes_config'], 'mb $SOURCE')
     res = {'trees': res[:env['MB_NRUNS']],
            'params': res[env['MB_NRUNS']:]}
     j = joiner(outdir)
