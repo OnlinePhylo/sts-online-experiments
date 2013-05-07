@@ -98,7 +98,7 @@ def full_mrbayes_config(env, outdir, c):
     elif c['n_taxa'] == 50:
         return env.MrBayesConf50(c['full_nexus'])[0]
     else:
-        raise ValueError(n_taxa)
+        raise ValueError(c['n_taxa'])
 
 @target_with_env()
 def full_mrbayes_trees(env, outdir, c):
@@ -143,6 +143,19 @@ nest.add('keep_count', lambda c: [c['n_taxa'] - c['trim_count']],
 
 nest.add('trim_taxon', trim_taxon)
 
+@target_with_env()
+def full_natural_extension(env, outdir, c):
+    sources = [natural_extension,
+               c['full_mrbayes_trees']['trees'][0],
+               c['fasta']]
+    targets = '$OUTDIR/natural_extension.csv'
+    return env.Command(targets, sources,
+            '${SOURCES[0]} input.sequence.file=${SOURCES[2]} '
+            'natural_extension.trees_nexus=${SOURCES[1]} '
+            'natural_extension.prune_taxon=$trim_taxon '
+            'natural_extension.burnin=250 '
+            'natural_extension.output_path=$TARGET')[0]
+
 nest.add('trim_base', lambda c: ['{n_taxa:02d}tax_trim_$trim_taxon'.format(**c)],
          create_dir=False)
 
@@ -160,7 +173,7 @@ def trimmed_mrbayes_config(env, outdir, c):
     elif c['n_taxa'] == 50:
         return env.MrBayesConf50(c['trimmed_nexus'])[0]
     else:
-        raise ValueError(n_taxa)
+        raise ValueError(c['n_taxa'])
 
 @target_with_env()
 def trimmed_mrbayes_trees(env, outdir, c):
@@ -200,6 +213,7 @@ def sts_posterior_comparison(env, outdir, c):
             for t in c['sts_online']]
     posterior_comparisons.extend(res)
     return res
+
 
 all_posterior_comparison = env.Local('$outdir/posterior_comparison.csv',
         posterior_comparisons, 'csvstack $SOURCES > $TARGET')

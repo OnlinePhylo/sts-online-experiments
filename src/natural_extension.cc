@@ -268,7 +268,7 @@ int run_main(int argc, char**argv)
     auto trees = read_nexus_trees(nexus_tree_path, burnin);
 
     // Parameter of exponential prior
-    double exp_mean = bpp::ApplicationTools::getDoubleParameter("natural_extension.exp_mean", params, 10.0, "", false);
+    double exp_mean = bpp::ApplicationTools::getDoubleParameter("natural_extension.exp_mean", params, 0.1, "", false);
 
     // Output
     std::string output_path = bpp::ApplicationTools::getAFilePath("natural_extension.output_path", params, true, false);
