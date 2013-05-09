@@ -11,8 +11,8 @@ def key_val(s):
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument('-i', '--input', default=sys.stdin)
-    p.add_argument('-o', '--output', default=sys.stdout)
+    p.add_argument('-i', '--input', default=sys.stdin, type=argparse.FileType('r'))
+    p.add_argument('-o', '--output', default=sys.stdout, type=argparse.FileType('w'))
     p.add_argument('kvs', metavar='k=v', nargs='+', type=key_val)
     a = p.parse_args()
 
