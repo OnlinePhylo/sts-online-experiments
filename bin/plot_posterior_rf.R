@@ -1,39 +1,55 @@
 #!/usr/bin/env Rscript
 library(ggplot2)
+library(reshape2)
+library(plyr)
 theme_set(theme_bw(16))
 
 args <- commandArgs(TRUE)
-stopifnot(length(args) == 2)
+stopifnot(length(args) == 3)
 pc <- read.csv(args[1], as.is=TRUE)
 pc <- transform(pc, tree=sub('\\.nwk$', '', basename(tree)))
 pc <- transform(pc, tree_number=as.integer(sub('\\d+taxon-(\\d+)', '\\1', tree)))
+pc <- transform(pc, tree_label=paste('tree', tree_number),
+                n_taxa_label=paste(n_taxa, 'taxa'))
 
 #print(aggregate(rf_distance~file, pc, length))
 
-message('RF')
-p <- ggplot(pc, aes(x=trim_taxon, y=rf_distance, fill=type, weight=exp(log_weight))) +
-    geom_boxplot() +
-    facet_grid(tree_number~n_taxa, scales='free_x') +
-    theme(legend.position='bottom') +
-    xlab('Trimmed taxon') +
-    ylab('RF Distance')
+m <- melt(pc, measure.vars=c('rf_distance', 'weighted_rf', 'euclidean'))
 
-ggsave(args[2], height=11, width=8)
+measure_names <- data.frame(variable=c('rf_distance', 'weighted_rf', 'euclidean'),
+                            measure=c('RF Distance', 'RF Distance (with branch lengths)', 'L2'))
 
-message('Weighted RF')
-p <- ggplot(pc, aes(x=trim_taxon, y=weighted_rf, fill=type, weight=exp(log_weight))) +
-    geom_boxplot() +
-    facet_grid(tree_number~n_taxa, scales='free_x') +
-    theme(legend.position='bottom') +
-    xlab('Trimmed taxon') +
-    ylab('RF distance (with branch lengths)')
-ggsave(paste(args[2], '.weightedrf.svg', sep=''), height=11, width=8)
+m <- transform(m, measure=measure_names$measure[match(as.character(m$variable), measure_names$variable)])
 
-message('Euclidean')
-p <- ggplot(pc, aes(x=trim_taxon, y=euclidean, fill=type, weight=exp(log_weight))) +
-    geom_boxplot() +
-    facet_grid(tree_number~n_taxa, scales='free_x') +
-    theme(legend.position='bottom') +
-    xlab('Trimmed taxon') +
-    ylab('L2')
-ggsave(paste(args[2], '.euclidean.svg', sep=''), height=11, width=8)
+pdf(args[2], width=11, height=11)
+# One plot per measure
+d_ply(m, .(measure), function(piece) {
+  measure <- piece$measure[1]
+  message(measure)
+  p <- ggplot(piece, aes(x=trim_taxon, y=value, fill=type, weight=exp(log_weight))) +
+      geom_boxplot() +
+      facet_grid(tree_label~n_taxa_label, scales='free_x') +
+      theme(legend.position='bottom') +
+      xlab('Trimmed taxon') +
+      ylab(measure)
+  print(p)
+})
+dev.off()
+
+pdf(args[3], width=7, height=7)
+# One plot per measure, tree size
+d_ply(m, .(measure, n_taxa), function(piece) {
+  measure <- piece$measure[1]
+  n_taxa_label <- piece$n_taxa_label[1]
+  message(paste(n_taxa_label, measure))
+  p <- ggplot(piece, aes(x=trim_taxon, y=value, fill=type, weight=exp(log_weight))) +
+      geom_boxplot() +
+      facet_wrap(~tree_label, scales='free_x') +
+      theme(legend.position='bottom') +
+      xlab('Trimmed taxon') +
+      ylab(measure) +
+      ggtitle(n_taxa_label)
+  print(p)
+})
+
+dev.off()

@@ -28,8 +28,9 @@ env['MB_NRUNS'] = 2
 env['BUILDERS']['ConvertToNexus'] = Builder(action='seqmagick convert --alphabet dna --output-format nexus $SOURCE $TARGET', suffix='.nex', src_suffix='.fasta')
 env['BUILDERS']['ConvertToPhyx'] = Builder(action='seqmagick convert $SOURCE $TARGET', suffix='.phyx', src_suffix='.fasta')
 env['BUILDERS']['NexusToNewick'] = Builder(action='nexus_to_newick.py $SOURCE $TARGET -b 250', suffix='.nwk', src_suffix='.t')
-env['BUILDERS']['MrBayesConf10'] = Builder(action='generate_mb.py --runs $MB_NRUNS --length 500000 $SOURCE -o $TARGET', suffix='.mb', src_suffix='.nex')
-env['BUILDERS']['MrBayesConf50'] = Builder(action='generate_mb.py --runs $MB_NRUNS --length 500000 $SOURCE -o $TARGET', suffix='.mb', src_suffix='.nex')
+env['BUILDERS']['MrBayesConf10'] = Builder(action='generate_mb.py --runs $MB_NRUNS --length 100000 $SOURCE -o $TARGET', suffix='.mb', src_suffix='.nex')
+env['BUILDERS']['MrBayesConf50'] = Builder(action='generate_mb.py --runs $MB_NRUNS --length 200000 $SOURCE -o $TARGET', suffix='.mb', src_suffix='.nex')
+env['BUILDERS']['MrBayesConf100'] = Builder(action='generate_mb.py --runs $MB_NRUNS --length 300000 $SOURCE -o $TARGET', suffix='.mb', src_suffix='.nex')
 env['BUILDERS']['StsTrees'] = Builder(action='sts_to_nexus.py -i $SOURCE -o $TARGET', suffix='.trees', src_suffix='.sts')
 env['BUILDERS']['StsLikes'] = Builder(action='cut -f 1 $SOURCE > $TARGET', suffix='.txt', src_suffix='.sts')
 # End builders
@@ -97,6 +98,8 @@ def full_mrbayes_config(env, outdir, c):
         return env.MrBayesConf10(c['full_nexus'])[0]
     elif c['n_taxa'] == 50:
         return env.MrBayesConf50(c['full_nexus'])[0]
+    elif c['n_taxa'] == 100:
+        return env.MrBayesConf100(c['full_nexus'])[0]
     else:
         raise ValueError(c['n_taxa'])
 
@@ -172,6 +175,8 @@ def trimmed_mrbayes_config(env, outdir, c):
         return env.MrBayesConf10(c['trimmed_nexus'])[0]
     elif c['n_taxa'] == 50:
         return env.MrBayesConf50(c['trimmed_nexus'])[0]
+    elif c['n_taxa'] == 100:
+        return env.MrBayesConf100(c['trimmed_nexus'])[0]
     else:
         raise ValueError(c['n_taxa'])
 
@@ -214,10 +219,9 @@ def sts_posterior_comparison(env, outdir, c):
     posterior_comparisons.extend(res)
     return res
 
-
 all_posterior_comparison = env.Local('$outdir/posterior_comparison.csv',
         posterior_comparisons, 'csvstack $SOURCES > $TARGET')
-all_posterior_plot = env.Local('$outdir/posterior_comparison.svg',
-        all_posterior_comparison, 'plot_posterior_rf.R $SOURCE $TARGET')
+all_posterior_plot = env.Local(['$outdir/posterior_comparison_all.pdf', '$outdir/posterior_comparison_byntaxa.pdf'],
+        all_posterior_comparison, 'plot_posterior_rf.R $SOURCE $TARGETS')
 
 w.finalize_all_aggregates()
