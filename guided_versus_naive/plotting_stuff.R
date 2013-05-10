@@ -1,41 +1,29 @@
+#!/usr/bin/env Rscript
 library(ggplot2)
+library(reshape2)
+
+theme_set(theme_bw(16))
+
 files <- list.files(pattern='50tax_trim_t1.*.comp.csv')
 df <- do.call(rbind, lapply(as.list(files), read.csv, as.is=TRUE))
-head(df)
 df <- transform(df, n_trees=particle_factor*750)
-ggplot(df, aes(x=ordered(n_trees), y=rf_distance, fill=move_type)) + geom_boxplot()
-aggregate(rf_distance~move_type, mean)
-aggregate(rf_distance~move_type, df, mean)
-ggplot(df, aes(x=ordered(n_trees), y=rf_distance, fill=move_type)) + geom_boxplot()
-ggplot(df, aes(x=factor(particle_factor), y=rf_distance, fill=move_type)) + geom_boxplot()
-nrow(df)
-aggregate(rf_distance~move_type, df, sd)
-aggregate(rf_distance~move_type, df)
-boxplot(rf_distance~move_type, df)
-ggplot(df, aes(x=factor(particle_factor), y=weighted_rf, fill=move_type)) + geom_boxplot()
-ggplot(df, aes(x=factor(particle_factor), y=euclidean, fill=move_type)) + geom_boxplot()
-head(df)
-library(reshape2)
-m <- melt(subset(df, particle_factor==1), measure.vars=c('rf_distance', 'weighted_rf', 'euclidean'))
-head(m)
-names <- data.frame(variable=c('rf_distance', 'weighted_rf', 'euclidean'), name=c('RF Distance', 'L1 distance', 'L2 distance'))
-head(names)
-m <- transform(m, name=names$name[match(variable, names$variable)])
-head(m)
-ggplot(m, aes(x=move_type, y=value, fill=move_type)) + geom_boxplot() + facet_wrap(~variable, scales='free_y')
-ggplot(m, aes(x=name, y=value, fill=name)) + geom_boxplot() + facet_wrap(~variable, scales='free_y')
-ggplot(m, aes(x=move_type, y=value, fill=name)) + geom_boxplot() + facet_wrap(~name, scales='free_y')
-ggplot(m, aes(x=move_type, y=value, fill=name)) + geom_boxplot() + facet_wrap(~name, scales='free_y') +theme(legend.position='none')
-ggplot(m, aes(x=move_type, y=value, fill=move_type)) + geom_boxplot() + facet_wrap(~name, scales='free_y') +theme(legend.position='none')
-guided_labels <- data.frame(move_type=c('guided', 'noguided'), move_label=c('Empirical Bayes', 'Simple'))
-m <- transform(m, move_label=guided_labels$move_label[match(move_type, guided_labels$move_type)])
-head(m)
-ggplot(m, aes(x=move_label, y=value, fill=move_label)) + geom_boxplot() + facet_wrap(~name, scales='free_y') +theme(legend.position='none')
-theme_set(theme_bw(16))
-ggplot(m, aes(x=move_label, y=value, fill=move_label)) + geom_boxplot() + facet_wrap(~name, scales='free_y') +theme(legend.position='none')
-ggplot(m, aes(x=move_label, y=value, fill=move_label)) + geom_boxplot() + facet_wrap(~name, scales='free_y') +theme(legend.position='none')  + xlab("Proposal Mechanism")
-gsave('proposal_comparison.svg', width=8, height=6
 
-ggsave('proposal_comparison.svg', width=8, height=6)
+m <- melt(subset(df, particle_factor==1), measure.vars=c('rf_distance', 'weighted_rf', 'euclidean'))
+
+names <- data.frame(variable=c('rf_distance', 'weighted_rf', 'euclidean'),
+                    name=c('RF Distance', 'L2 distance', 'L1 distance'))
+guided_labels <- data.frame(move_type=c('guided', 'noguided'),
+                            move_label=c('Empirical Bayes', 'Simple'))
+
+m <- transform(m, name=names$name[match(variable, names$variable)],
+               move_label=guided_labels$move_label[match(move_type, guided_labels$move_type)])
+
+
+
+
+p <- ggplot(m, aes(x=move_label, y=value, fill=move_label)) +
+    geom_boxplot() +
+    facet_wrap(~name, scales='free_y') +theme(legend.position='none')  +
+    xlab("Proposal Mechanism")
+
 ggsave('proposal_comparison.svg', width=9, height=6)
-savehistory('plotting_stuff.R')
