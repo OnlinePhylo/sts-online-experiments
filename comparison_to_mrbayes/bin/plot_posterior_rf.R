@@ -3,6 +3,7 @@ library(ggplot2)
 library(reshape2)
 library(plyr)
 theme_set(theme_bw(16))
+theme_update(axis.text.x=element_text(angle=90))
 
 args <- commandArgs(TRUE)
 stopifnot(length(args) == 3)
@@ -10,7 +11,11 @@ pc <- read.csv(args[1], as.is=TRUE)
 pc <- transform(pc, tree=sub('\\.nwk$', '', basename(tree)))
 pc <- transform(pc, tree_number=as.integer(sub('\\d+taxon-(\\d+)', '\\1', tree)))
 pc <- transform(pc, tree_label=paste('tree', tree_number),
-                n_taxa_label=paste(n_taxa, 'taxa'))
+                n_taxa_label=paste(n_taxa, 'taxa'), n_trimmed=ifelse(trim_taxon=='', 0, nchar(gsub('[^-]', '', trim_taxon)) + 1))
+
+tt <- unique(pc[, c('trim_taxon', 'n_trimmed')])
+tt <- tt[order(tt$n_trimmed, tt$trim_taxon),]
+pc <- transform(pc, trim_taxon=factor(trim_taxon, levels=tt$trim_taxon))
 
 #print(aggregate(rf_distance~file, pc, length))
 
