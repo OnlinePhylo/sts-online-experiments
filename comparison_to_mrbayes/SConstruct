@@ -3,6 +3,7 @@
 from __future__ import division
 
 import glob
+import itertools
 import os
 import os.path
 import re
@@ -134,30 +135,35 @@ def full_mrbayes_consensus(env, outdir, c):
                         'sumtrees.py -q -b 250 $SOURCE > $TARGET')[0] for t in c['full_mrbayes_trees']['trees']]
 
 nest.add('trim_replicates', [5], create_dir=False)
-nest.add('trim_count', [1], create_dir=False)
+nest.add('trim_count', [1, 2], create_dir=False)
 
 def trim_taxon(c):
-    assert c['trim_count'] == 1
     all_taxa = ['t{0}'.format(i+1) for i in xrange(c['n_taxa'])]
-    return all_taxa[:c['trim_replicates']]
+
+    if c['trim_count'] == 1:
+        return all_taxa[:c['trim_replicates']]
+    else:
+        combinations = ('-'.join(p) for c in itertools.combinations(all_taxa, c['trim_count'])
+                        for p in itertools.permutations(c))
+        return list(itertools.islice(combinations, 0, c['trim_replicates']))
 
 nest.add('keep_count', lambda c: [c['n_taxa'] - c['trim_count']],
          create_dir=False)
 
 nest.add('trim_taxon', trim_taxon)
 
-@target_with_env()
-def full_natural_extension(env, outdir, c):
-    sources = [natural_extension,
-               c['full_mrbayes_trees']['trees'][0],
-               c['fasta']]
-    targets = '$OUTDIR/natural_extension.csv'
-    return env.Command(targets, sources,
-            '${SOURCES[0]} input.sequence.file=${SOURCES[2]} '
-            'natural_extension.trees_nexus=${SOURCES[1]} '
-            'natural_extension.prune_taxon=$trim_taxon '
-            'natural_extension.burnin=250 '
-            'natural_extension.output_path=$TARGET')[0]
+#@target_with_env()
+#def full_natural_extension(env, outdir, c):
+    #sources = [natural_extension,
+               #c['full_mrbayes_trees']['trees'][0],
+               #c['fasta']]
+    #targets = '$OUTDIR/natural_extension.csv'
+    #return env.Command(targets, sources,
+            #'${SOURCES[0]} input.sequence.file=${SOURCES[2]} '
+            #'natural_extension.trees_nexus=${SOURCES[1]} '
+            #'natural_extension.prune_taxon=$trim_taxon '
+            #'natural_extension.burnin=250 '
+            #'natural_extension.output_path=$TARGET')[0]
 
 nest.add('trim_base', lambda c: ['{n_taxa:02d}tax_trim_$trim_taxon'.format(**c)],
          create_dir=False)
@@ -166,7 +172,7 @@ nest.add('trim_base', lambda c: ['{n_taxa:02d}tax_trim_$trim_taxon'.format(**c)]
 def trimmed_nexus(env, outdir, c):
     return env.Local('$OUTDIR/${trim_base}.nex',
             '$full_nexus',
-            "seqmagick convert --pattern-exclude '^($trim_taxon)$'  --input-format "
+            "seqmagick convert --pattern-exclude '^(" + c['trim_taxon'].replace('-', '|') + ")$'  --input-format "
             'nexus --alphabet dna $SOURCE $TARGET')[0]
 
 @target_with_env()
