@@ -22,7 +22,7 @@ pc <- transform(pc, trim_taxon=factor(trim_taxon, levels=tt$trim_taxon))
 m <- melt(pc, measure.vars=c('rf_distance', 'weighted_rf', 'euclidean'))
 
 measure_names <- data.frame(variable=c('rf_distance', 'weighted_rf', 'euclidean'),
-                            measure=c('RF Distance', 'RF Distance (with branch lengths)', 'L2'))
+                            measure=c('RF Distance', 'L2', 'L1'))
 
 m <- transform(m, measure=measure_names$measure[match(as.character(m$variable), measure_names$variable)])
 

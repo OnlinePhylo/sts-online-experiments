@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import argparse
+import json
 import logging
 import math
 import sys
@@ -9,9 +10,11 @@ import dendropy
 def parse_weighted_trees(fp, **kwargs):
     max_log_weight = -sys.float_info.max
     trees = []
-    for line in fp:
-        log_weight, nwk_str = line.split('\t', 1)
-        log_weight = float(log_weight)
+    jtrees = json.load(fp)
+    for i, tree in enumerate(jtrees['trees']):
+        sys.stderr.write('{0:10d}\r'.format(i + 1))
+        nwk_str = str(tree['newickString'])  # This can't be unicode for dendropy
+        log_weight = tree['logWeight']
         if log_weight > max_log_weight:
             max_log_weight = log_weight
         tree = dendropy.Tree.get_from_string(nwk_str, 'newick', **kwargs)
@@ -27,8 +30,10 @@ def parse_weighted_trees(fp, **kwargs):
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument('-i', '--infile', type=argparse.FileType('r'), default=sys.stdin)
-    p.add_argument('-o', '--outfile', type=argparse.FileType('w'), default=sys.stdout)
+    p.add_argument('-i', '--infile', type=argparse.FileType('r'),
+            default=sys.stdin)
+    p.add_argument('-o', '--outfile', type=argparse.FileType('w'),
+            default=sys.stdout)
     a = p.parse_args()
 
     logging.basicConfig(level=logging.INFO)
