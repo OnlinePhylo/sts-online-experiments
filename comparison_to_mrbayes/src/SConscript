@@ -7,5 +7,6 @@ env = Environment(
         )
 
 natural_extension = env.Program('natural_extension.cc')
+mid_edge = env.Program('mid_edge_test.cc')
 
 Return('natural_extension')

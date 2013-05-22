@@ -143,8 +143,7 @@ def trim_taxon(c):
     if c['trim_count'] == 1:
         return all_taxa[:c['trim_replicates']]
     else:
-        combinations = ('-'.join(p) for c in itertools.combinations(all_taxa, c['trim_count'])
-                        for p in itertools.permutations(c))
+        combinations = ('-'.join(c) for c in itertools.combinations(all_taxa, c['trim_count']))
         return list(itertools.islice(combinations, 0, c['trim_replicates']))
 
 nest.add('keep_count', lambda c: [c['n_taxa'] - c['trim_count']],
