@@ -26,4 +26,4 @@ p <- ggplot(m, aes(x=move_label, y=value, fill=move_label)) +
     facet_wrap(~name, scales='free_y') +theme(legend.position='none')  +
     xlab("Proposal Mechanism")
 
-ggsave('proposal_comparison.svg', width=9, height=6)
+ggsave('proposal_comparison.svg', width=8, height=4)

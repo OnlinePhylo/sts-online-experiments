@@ -135,7 +135,7 @@ def full_mrbayes_consensus(env, outdir, c):
                         'sumtrees.py -q -b 250 $SOURCE > $TARGET')[0] for t in c['full_mrbayes_trees']['trees']]
 
 nest.add('trim_replicates', [5], create_dir=False)
-nest.add('trim_count', [1, 2], create_dir=False)
+nest.add('trim_count', [1, 2, 5], create_dir=False)
 
 def trim_taxon(c):
     all_taxa = ['t{0}'.format(i+1) for i in xrange(c['n_taxa'])]

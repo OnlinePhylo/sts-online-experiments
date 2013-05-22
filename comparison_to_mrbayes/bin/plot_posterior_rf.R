@@ -41,7 +41,7 @@ d_ply(m, .(measure), function(piece) {
 })
 dev.off()
 
-pdf(args[3], width=7, height=7)
+pdf(args[3], width=10, height=7)
 # One plot per measure, tree size
 d_ply(m, .(measure, n_taxa), function(piece) {
   measure <- piece$measure[1]
@@ -56,5 +56,20 @@ d_ply(m, .(measure, n_taxa), function(piece) {
       ggtitle(n_taxa_label)
   print(p)
 })
-
 dev.off()
+
+d_ply(subset(m, tree_label=='tree 2' & variable == 'rf_distance'),
+      .(n_taxa_label), function(piece) {
+  piece <- transform(piece,
+                     n_trimmed_label=ifelse(n_trimmed=='0', '', paste('trim', n_trimmed)))
+  n_taxa_label <- piece$n_taxa_label[1]
+  measure <- piece$measure[1]
+  p <- ggplot(piece, aes(x=trim_taxon, y=value, fill=type, weight=exp(log_weight))) +
+      geom_boxplot() +
+      facet_grid(~n_trimmed_label, scales='free_x', space="free") +
+      theme(legend.position='bottom', axis.text.x=element_blank(),
+            axis.title.x=element_blank()) +
+      ylab(measure) +
+      ggtitle(n_taxa_label)
+  ggsave(paste(piece$n_taxa[1], 'taxon_rf_tree2.svg', sep=''), height=4)
+})
