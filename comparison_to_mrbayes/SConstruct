@@ -224,21 +224,20 @@ def sts_posterior_comparison(env, outdir, c):
     posterior_comparisons.extend(res)
     return res
 
-asdsf_files = []
+pp_files = []
 @target_with_env()
 def sts_asdsf_comparison(env, outdir, c):
-    j = joiner(outdir)
     env['kvs'] = ' '.join('{0}="{1}"'.format(k, c.get(k, '')) for k in posterior_comparisons_keys)
 
-    res = [env.Local(j(stripext(str(t)) + '.asdsf.csv'),
-                     env.Flatten([c['full_mrbayes_trees']['trees'], c['sts_online']]),
-                     'asdsf.py $SOURCES | decorate_csv.py $kvs type=sts-online > $TARGET')
-            for t in c['sts_online']]
-    asdsf_files.extend(res)
-    return res
+    pp, = env.Local(['$OUTDIR/split_pp.csv'],
+            env.Flatten([c['full_mrbayes_trees']['trees'], c['sts_online']]),
+            'asdsf.py --pp-table=- -o /dev/null $SOURCES | decorate_csv.py $kvs > $TARGET')
 
-all_asdsf_comparison = env.Local('$outdir/asdsf_comparison.csv',
-        asdsf_files, 'csvstack $SOURCES > $TARGET')
+    pp_files.append(pp)
+    return pp
+
+all_pp_comparison = env.Local('$outdir/pp_comparison.csv',
+        pp_files, 'csvstack $SOURCES > $TARGET')
 
 all_posterior_comparison = env.Local('$outdir/posterior_comparison.csv',
         posterior_comparisons, 'csvstack $SOURCES > $TARGET')
