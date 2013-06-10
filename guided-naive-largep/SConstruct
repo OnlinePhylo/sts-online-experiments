@@ -1,0 +1,240 @@
+#!/usr/bin/env scons -Q
+
+from __future__ import division
+
+import glob
+import itertools
+import os
+import os.path
+import re
+import functools
+
+from nestly import Nest, stripext
+from nestly.scons import SConsWrap
+from bioscons.slurm import SlurmEnvironment
+from SCons.Script import Builder
+
+def joiner(*args):
+    return functools.partial(os.path.join, *args)
+
+trees = sorted(map(os.path.abspath, glob.glob('trees/*.nwk')))
+
+env = SlurmEnvironment(ENV=os.environ.copy())
+env.PrependENVPath('PATH', '../comparison_to_mrbayes/bin')
+env.PrependENVPath('PATH', './bin')
+env['outdir'] = 'output'
+
+env['MB_NRUNS'] = 2
+
+# Builders
+env['BUILDERS']['ConvertToNexus'] = Builder(action='seqmagick convert --alphabet dna --output-format nexus $SOURCE $TARGET', suffix='.nex', src_suffix='.fasta')
+env['BUILDERS']['ConvertToPhyx'] = Builder(action='seqmagick convert $SOURCE $TARGET', suffix='.phyx', src_suffix='.fasta')
+env['BUILDERS']['NexusToNewick'] = Builder(action='nexus_to_newick.py $SOURCE $TARGET -b 250', suffix='.nwk', src_suffix='.t')
+env['BUILDERS']['MrBayesConf10'] = Builder(action='generate_mb.py --runs $MB_NRUNS --length 100000 $SOURCE -o $TARGET', suffix='.mb', src_suffix='.nex')
+env['BUILDERS']['MrBayesConf50'] = Builder(action='generate_mb.py --runs $MB_NRUNS --length 200000 $SOURCE -o $TARGET', suffix='.mb', src_suffix='.nex')
+env['BUILDERS']['MrBayesConf100'] = Builder(action='generate_mb.py --runs $MB_NRUNS --length 300000 $SOURCE -o $TARGET', suffix='.mb', src_suffix='.nex')
+env['BUILDERS']['StsTrees'] = Builder(action='sts_to_nexus.py -i $SOURCE -o $TARGET', suffix='.trees', src_suffix='.sts')
+env['BUILDERS']['StsLikes'] = Builder(action='cut -f 1 $SOURCE > $TARGET', suffix='.txt', src_suffix='.sts')
+# End builders
+
+
+nest = Nest()
+w = SConsWrap(nest, dest_dir='output')
+
+target_with_env = functools.partial(w.add_target_with_env, environment=env)
+
+# Aggregate
+posterior_comparisons = []
+posterior_comparisons_keys = ('tree', 'n_taxa', 'trim_taxon', 'particle_factor', 'move_type')
+
+nest.add('tree', trees, label_func=stripext)
+
+
+def get_n_taxa(c):
+    m = re.search(r'(\d+)taxon-.*', c['tree'])
+    assert m
+    return [int(m.group(1))]
+nest.add('n_taxa', get_n_taxa, create_dir=False)
+
+#@w.add_aggregate(list)
+#def pendant_bl(outdir, c, inputs):
+    #env.Local(os.path.join(outdir, 'pendant_bl_ess.csv'),
+            #env.Flatten([c['tree'], inputs]),
+            #'pendant_bl.py $SOURCES -o $TARGET')
+
+@target_with_env()
+def fasta(env, outdir, c):
+    j = joiner(outdir)
+    target = j(stripext(c['tree']) + '.fasta')
+    return env.Local(target, c['tree'],
+      'bppseqgen '
+      'input.tree.file=$SOURCE '
+      'input.tree.format=Newick '
+      'output.sequence.file=$TARGET '
+      'output.sequence.format=Fasta '
+      'alphabet=DNA '
+      'number_of_sites=1000 '
+      'rate_distribution=Uniform '
+      'model=JC69 ')[0]
+
+
+@target_with_env()
+def full_phylip(env, outdir, c):
+    return env.ConvertToPhyx(c['fasta'])[0]
+
+
+@target_with_env()
+def phyml_tree(env, outdir, c):
+    return env.Command('${full_phylip}_phyml_tree.txt',
+            ['$full_phylip', '$tree'],
+            'phyml -i ${SOURCES[0]} -u ${SOURCES[1]} -c 1 -m JC69 -o l -b 0')[0]
+
+@target_with_env()
+def full_nexus(env, outdir, c):
+    j = joiner(outdir)
+    fasta = str(c['fasta'])
+    return env.ConvertToNexus(j(stripext(fasta) + '.nex'), fasta)[0]
+
+@target_with_env()
+def full_mrbayes_config(env, outdir, c):
+    return env.MrBayesConf10(c['full_nexus'])[0]
+
+@target_with_env()
+def full_mrbayes_trees(env, outdir, c):
+    j = joiner(outdir)
+    targets = [j('{0}.run{1}.{2}'.format(stripext(str(c['full_nexus'])), i, t))
+               for t in ('t', 'p')
+               for i in xrange(1, env['MB_NRUNS'] + 1)]
+    res = env.SRun(targets, c['full_mrbayes_config'], 'mb $SOURCE')
+    res = {'trees': res[:env['MB_NRUNS']],
+           'params': res[env['MB_NRUNS']:]}
+    j = joiner(outdir)
+    env['kvs'] = ' '.join('{0}="{1}"'.format(k, c.get(k, '')) for k in posterior_comparisons_keys)
+
+    pc = [env.Local(j(stripext(str(t)) + '.comp.csv'),
+                    [c['phyml_tree'], t],
+                    'compare_posterior_topologies.py -b 250 $SOURCES | decorate_csv.py $kvs type=MrBayes > $TARGET')
+            for t in res['trees']]
+    posterior_comparisons.extend(pc)
+
+    return res
+
+@target_with_env()
+def full_mrbayes_newick(env, outdir, c):
+    return [env.NexusToNewick(t)[0] for t in c['full_mrbayes_trees']['trees']]
+
+@target_with_env()
+def full_mrbayes_consensus(env, outdir, c):
+    return [env.Command('$OUTDIR/' + stripext(str(t)) + '.sum.tre',
+                        t,
+                        'sumtrees.py -q -b 250 $SOURCE > $TARGET')[0] for t in c['full_mrbayes_trees']['trees']]
+
+nest.add('trim_replicates', [5], create_dir=False)
+nest.add('trim_count', [1], create_dir=False)
+
+def trim_taxon(c):
+    all_taxa = ['t{0}'.format(i+1) for i in xrange(c['n_taxa'])]
+
+    if c['trim_count'] == 1:
+        return all_taxa[:c['trim_replicates']]
+    else:
+        combinations = ('-'.join(c) for c in itertools.combinations(all_taxa, c['trim_count']))
+        return list(itertools.islice(combinations, 0, c['trim_replicates']))
+
+nest.add('keep_count', lambda c: [c['n_taxa'] - c['trim_count']],
+         create_dir=False)
+
+nest.add('trim_taxon', trim_taxon)
+
+#@target_with_env()
+#def full_natural_extension(env, outdir, c):
+    #sources = [natural_extension,
+               #c['full_mrbayes_trees']['trees'][0],
+               #c['fasta']]
+    #targets = '$OUTDIR/natural_extension.csv'
+    #return env.Command(targets, sources,
+            #'${SOURCES[0]} input.sequence.file=${SOURCES[2]} '
+            #'natural_extension.trees_nexus=${SOURCES[1]} '
+            #'natural_extension.prune_taxon=$trim_taxon '
+            #'natural_extension.burnin=250 '
+            #'natural_extension.output_path=$TARGET')[0]
+
+nest.add('trim_base', lambda c: ['{n_taxa:02d}tax_trim_$trim_taxon'.format(**c)],
+         create_dir=False)
+
+@target_with_env()
+def trimmed_nexus(env, outdir, c):
+    return env.Local('$OUTDIR/${trim_base}.nex',
+            '$full_nexus',
+            "seqmagick convert --pattern-exclude '^(" + c['trim_taxon'].replace('-', '|') + ")$'  --input-format "
+            'nexus --alphabet dna $SOURCE $TARGET')[0]
+
+@target_with_env()
+def trimmed_mrbayes_config(env, outdir, c):
+    return env.MrBayesConf10(c['trimmed_nexus'])[0]
+
+@target_with_env()
+def trimmed_mrbayes_trees(env, outdir, c):
+    targets = ['$OUTDIR/${{trim_base}}.run{0}.{1}'.format(i, j)
+               for j in ('t', 'p')
+               for i in xrange(1, env['MB_NRUNS'] + 1)]
+    res = env.SRun(targets,
+                   ['$trimmed_mrbayes_config', '$trimmed_nexus'],
+                   'mb $SOURCE')
+    return {'trees': res[:env['MB_NRUNS']],
+            'params': res[env['MB_NRUNS']:]}
+
+nest.add('move_type', ['guided', 'naive'])
+
+nest.add('particle_factor', lambda c: [20] if c['move_type'] == 'naive' else [1], create_dir=False)
+
+@target_with_env()
+def sts_online(env, outdir, c):
+    j = joiner(outdir)
+    if c['move_type'] == 'naive':
+        env['sts_args'] = '--no-guided-moves'
+
+    result = [env.Command(j(stripext(str(treefile)) + '.sts.json'),
+                          ['$fasta', treefile],
+                          'sts-online $sts_args -p $particle_factor -b 250 $SOURCES $TARGET')[0]
+            for treefile in c['trimmed_mrbayes_trees']['trees']]
+    #c['pendant_bl'].extend(result)
+    return result
+
+@target_with_env()
+def sts_posterior_comparison(env, outdir, c):
+    j = joiner(outdir)
+    env['kvs'] = ' '.join('{0}="{1}"'.format(k, c.get(k, '')) for k in posterior_comparisons_keys)
+
+    res = [env.Local(j(stripext(str(t)) + '.comp.csv'),
+                     [c['phyml_tree'], t],
+                     'compare_posterior_topologies.py $SOURCES | decorate_csv.py $kvs type=sts-online > $TARGET')
+            for t in c['sts_online']]
+    posterior_comparisons.extend(res)
+    return res
+
+pp_files = []
+@target_with_env()
+def sts_asdsf_comparison(env, outdir, c):
+    env['kvs'] = ' '.join('{0}="{1}"'.format(k, c.get(k, '')) for k in posterior_comparisons_keys)
+
+    pp, = env.Local(['$OUTDIR/split_pp.csv'],
+            env.Flatten([c['full_mrbayes_trees']['trees'], c['sts_online']]),
+            'asdsf.py --pp-table=- -o /dev/null $SOURCES | decorate_csv.py $kvs > $TARGET')
+
+    pp_files.append(pp)
+    return pp
+
+all_pp_comparison, = env.Local('$outdir/pp_comparison.csv',
+                               pp_files, 'csvstack $SOURCES > $TARGET')
+
+all_pp_plot = env.Local('$outdir/pp_comparison.svg',
+                        all_pp_comparison,
+                        'pp_comparison.R $SOURCE $TARGET')
+
+#all_posterior_comparison = env.Local('$outdir/posterior_comparison.csv',
+        #posterior_comparisons, 'csvstack $SOURCES > $TARGET')
+#all_posterior_plot = env.Local(['$outdir/posterior_comparison_all.pdf', '$outdir/posterior_comparison_byntaxa.pdf'],
+        #all_posterior_comparison, 'plot_posterior_rf.R $SOURCE $TARGETS')
+
+#w.finalize_all_aggregates()
