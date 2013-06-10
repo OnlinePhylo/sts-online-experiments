@@ -232,8 +232,10 @@ all_pp_plot = env.Local('$outdir/pp_comparison.svg',
                         all_pp_comparison,
                         'pp_comparison.R $SOURCE $TARGET')
 
-#all_posterior_comparison = env.Local('$outdir/posterior_comparison.csv',
-        #posterior_comparisons, 'csvstack $SOURCES > $TARGET')
+all_posterior_comparison = env.Local('$outdir/posterior_comparison.csv',
+                                     posterior_comparisons,
+                                     'csvstack $SOURCES > $TARGET')
+
 #all_posterior_plot = env.Local(['$outdir/posterior_comparison_all.pdf', '$outdir/posterior_comparison_byntaxa.pdf'],
         #all_posterior_comparison, 'plot_posterior_rf.R $SOURCE $TARGETS')
 
