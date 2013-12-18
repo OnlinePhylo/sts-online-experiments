@@ -134,6 +134,19 @@ def full_mrbayes_consensus(env, outdir, c):
                         t,
                         'sumtrees.py -q -b 250 $SOURCE > $TARGET')[0] for t in c['full_mrbayes_trees']['trees']]
 
+@target_with_env()
+def full_natural_extension(env, outdir, c):
+    sources = [natural_extension,
+               c['full_mrbayes_trees']['trees'][0],
+               c['fasta']]
+    targets = '$OUTDIR/natural_extension.csv'
+    return env.Command(targets, sources,
+            '${SOURCES[0]} input.sequence.file=${SOURCES[2]} '
+            'natural_extension.trees_nexus=${SOURCES[1]} '
+            'natural_extension.prune_taxon=$trim_taxon '
+            'natural_extension.burnin=250 '
+            'natural_extension.output_path=$TARGET')[0]
+
 nest.add('trim_replicates', [5], create_dir=False)
 nest.add('trim_count', [1, 2, 5], create_dir=False)
 
@@ -150,19 +163,6 @@ nest.add('keep_count', lambda c: [c['n_taxa'] - c['trim_count']],
          create_dir=False)
 
 nest.add('trim_taxon', trim_taxon)
-
-#@target_with_env()
-#def full_natural_extension(env, outdir, c):
-    #sources = [natural_extension,
-               #c['full_mrbayes_trees']['trees'][0],
-               #c['fasta']]
-    #targets = '$OUTDIR/natural_extension.csv'
-    #return env.Command(targets, sources,
-            #'${SOURCES[0]} input.sequence.file=${SOURCES[2]} '
-            #'natural_extension.trees_nexus=${SOURCES[1]} '
-            #'natural_extension.prune_taxon=$trim_taxon '
-            #'natural_extension.burnin=250 '
-            #'natural_extension.output_path=$TARGET')[0]
 
 nest.add('trim_base', lambda c: ['{n_taxa:02d}tax_trim_$trim_taxon'.format(**c)],
          create_dir=False)
@@ -200,7 +200,7 @@ def trimmed_mrbayes_trees(env, outdir, c):
 nest.add('tree_moves', [0])
 
 # nest.add('particle_factor', [1, 5, 10])
-nest.add('particle_factor', [1])
+nest.add('particle_factor', [1, 2, 5])
 
 @target_with_env()
 def sts_online(env, outdir, c):
