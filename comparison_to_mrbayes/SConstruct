@@ -56,11 +56,12 @@ def get_n_taxa(c):
     return [int(m.group(1))]
 nest.add('n_taxa', get_n_taxa, create_dir=False)
 
-@w.add_aggregate(list)
+#@w.add_aggregate(list)
 def pendant_bl(outdir, c, inputs):
     env.Local(os.path.join(outdir, 'pendant_bl_ess.csv'),
             env.Flatten([c['tree'], inputs]),
             'pendant_bl.py $SOURCES -o $TARGET')
+w.add_aggregate('pendant_bl', list)
 
 @target_with_env()
 def fasta(env, outdir, c):
@@ -244,4 +245,4 @@ all_posterior_comparison = env.Local('$outdir/posterior_comparison.csv',
 all_posterior_plot = env.Local(['$outdir/posterior_comparison_all.pdf', '$outdir/posterior_comparison_byntaxa.pdf'],
         all_posterior_comparison, 'plot_posterior_rf.R $SOURCE $TARGETS')
 
-w.finalize_all_aggregates()
+#w.finalize_all_aggregates()
