@@ -1,0 +1,55 @@
+# STS proposal comparison
+
+```{r}
+library(ggplot2)
+theme_set(theme_bw(16) + theme(axis.text.x = element_text(angle = 30, hjust = 1),
+                               strip.background = element_blank()))
+
+ess <- read.csv('output/ess_calls.csv', as.is=TRUE)
+# R 3.1.0 "change"/bug
+ess <- transform(ess, last_ess = as.numeric(last_ess))
+
+ess$by_length <- ifelse(ess$by_length == 'True', 'by length', 'by edge')
+```
+
+## Partials updates:
+
+Number of likelihood calls required by various proposal methods:
+
+```{r, fig.width = 12}
+p <- ggplot(ess, aes(x = paste(proposal_method, by_length), y = likelihood_calls)) +
+  geom_boxplot() +
+  facet_grid(n_taxa ~ trim_count) +
+  scale_y_log10()
+print(p)
+```
+
+## ... and effective sample size:
+
+```{r, fig.width = 12}
+p <- ggplot(ess, aes(x = paste(proposal_method, by_length), y = last_ess)) +
+  geom_boxplot() +
+  facet_grid(n_taxa ~ trim_count)
+print(p)
+```
+## ASDSF
+
+[Average Standard Deviation of Split Frequencies (ASDSF)](http://www.bali-phy.org/README.html#idp54307728)
+
+```{r, fig.width = 10, fig.height = 10}
+library(stringr)
+asdsf <- read.csv('output/asdsf.csv', as.is=TRUE)
+
+asdsf$by_length <- ifelse(asdsf$by_length == 'True', 'by length', 'by edge')
+asdsf <- transform(asdsf, proposal = paste(proposal_method, by_length),
+                   n_trimmed = paste('trim', str_count(trim_taxon, '-') + 1),
+                   n_taxa = paste(n_taxa, 'taxa'))
+
+p <- ggplot(asdsf, aes(x = proposal, y = asdsf, fill=type)) +
+  geom_boxplot() +
+  geom_hline(yintercept = 0.01, linetype = 'dashed') +
+  facet_grid(n_trimmed ~ n_taxa) +
+  theme(legend.position = 'bottom')
+print(p)
+
+```
