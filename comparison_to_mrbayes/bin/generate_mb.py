@@ -38,7 +38,8 @@ def main():
 
     t = TEMPLATE.format(nexus=a.nexus_path, out_base=base, extra=extra, length=a.length,
                         samplefreq=a.length // 1000, printfreq = a.length // 100,
-                        nruns=a.runs, nchains=a.chains)
+                        nruns=a.runs, nchains=a.chains,
+                        diagnfreq=a.length / 2)
     with a.outfile as fp:
         fp.write(t)
 
