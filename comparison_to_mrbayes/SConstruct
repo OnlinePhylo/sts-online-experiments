@@ -232,13 +232,17 @@ def sts_posterior_comparison(env, outdir, c):
     return res
 
 asdsf_files = []
+pp_files = []
 @w.add_target_with_env(env)
 def sts_asdsf_comparison(env, outdir, c):
     env['kvs'] = ' '.join('{0}="{1}"'.format(k, c.get(k, '')) for k in posterior_comparisons_keys)
 
-    asdsf, = env.Local(['$OUTDIR/asdsf.csv'],
-                       env.Flatten([c['full_mrbayes_trees']['trees'], c['sts_online']]),
-                       'asdsf.py $SOURCES | decorate_csv.py $kvs > $TARGET')
+    asdsf, pp = env.Local(['$OUTDIR/asdsf.csv', '$OUTDIR/pp.csv'],
+                          env.Flatten([c['full_mrbayes_trees']['trees'], c['sts_online']]),
+                          'asdsf.py $SOURCES --pp-table ${TARGETS[1]} | decorate_csv.py $kvs > $TARGET')
+    pp_files.extend(env.Local('$OUTDIR/pp_annot.csv', pp,
+                              'decorate_csv.py $kvs < $SOURCE > $TARGET'))
+
     #'asdsf.py --pp-table=- -o /dev/null $SOURCES | decorate_csv.py $kvs > $TARGET')
 
     asdsf_files.append(asdsf)
@@ -259,8 +263,8 @@ def pendant_bl_ess(env, outdir, c):
               env.Flatten([c['tree'], c['pendant_bl']]),
               'pendant_bl.py $SOURCES -o $TARGET')
 
-#all_pp_comparison = env.Local('$outdir/pp_comparison.csv',
-                              #pp_files, 'csvstack $SOURCES > $TARGET')
+all_pp_comparison = env.Local('$outdir/pp_comparison.csv',
+                              pp_files, 'csvstack $SOURCES > $TARGET')
 
 all_posterior_comparison = env.Local('$outdir/posterior_comparison.csv',
                                      posterior_comparisons, 'csvstack $SOURCES > $TARGET')
