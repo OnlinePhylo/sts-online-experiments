@@ -2,6 +2,8 @@
 
 ```{r}
 library(ggplot2)
+library(dplyr)
+library(tidyr)
 theme_set(theme_bw(16) + theme(axis.text.x = element_text(angle = 30, hjust = 1),
                                strip.background = element_blank()))
 
@@ -43,6 +45,38 @@ p <- ggplot(ess, aes(x = paste(proposal_method, by_length), y = likelihood_calls
   xlab('Proposal method') +
   ylab('# of partials updates per unit ESS')
 print(p)
+```
+
+## Split probabilities
+
+```{r, fig.width = 14}
+df <- read.csv('output/pp_comparison.csv', as.is = TRUE)
+df[, c('pp1', 'pp2')] <- sapply(df[, c('pp1', 'pp2')], as.numeric)
+# Single leaf trimming
+df <- transform(subset(df, !grepl('-', trim_taxon)),
+                proposal = paste(proposal_method, 'by', ifelse(by_length == 'True', 'length', 'edge')))
+
+p <- ggplot(df, aes(x = pp1, y = pp2, color = type)) +
+  geom_point() +
+  facet_grid(n_taxa ~ proposal, scales = 'free_y') +
+  coord_equal() +
+  theme(legend.position = 'bottom')
+print(p)
+
+# Coefficient of determination
+rsq <- group_by(df, type, proposal, n_taxa) %>%
+  summarize(r_sq = 1 - sum((pp2 - pp1)^2) / sum((pp2 - mean(pp2))^2),
+            mse = mean((pp1 - pp2)^2)) %>%
+  gather(variable, value, r_sq:mse) %>%
+  unite(var, variable, type) %>%
+  spread(var, value) %>%
+  select(-`mse_mrbayes-mrbayes`) %>%
+  arrange(-`r_sq_mrbayes-sts`)
+```
+
+#### Coefficient of determination
+```{r, results = 'asis'}
+kable(rsq)
 ```
 
 ## ASDSF

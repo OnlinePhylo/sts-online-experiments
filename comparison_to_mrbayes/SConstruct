@@ -210,7 +210,7 @@ def sts_online(env, outdir, c):
         else:
             env['proposal_method'] = 'uniform-edge'
     else:
-        env['by_length'] = '--max-length 0.01' if c['by_length'] else ''
+        env['by_length'] = '--max-length 0.03' if c['by_length'] else ''
     result = [env.Command(j(stripext(str(treefile)) + '.sts.json'),
                           ['$fasta', treefile],
                           'sts-online -p $particle_factor $by_length --proposal-method $proposal_method -b 250 $SOURCES $TARGET')[0]
