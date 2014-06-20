@@ -1,41 +1,57 @@
 # STS proposal comparison
 
+New:
+
+* [Number of BEAGLE update partials operations per unit increase in ESS](#h-beagle-ops-per-ess)
+* [Posterior split frequency comparison](#h-split-probabilities)
+
+`r paste(system2('bin/sts-online', '--version', stdout=TRUE), collapse='')`.
+
+Pipeline version `r system2('git', c('describe', '--always', '--dirty'), stdout=TRUE)`.
+
 ```{r}
-library(ggplot2)
-library(dplyr)
-library(tidyr)
+suppressPackageStartupMessages(library(ggplot2))
+suppressPackageStartupMessages(library(dplyr))
+suppressPackageStartupMessages(library(tidyr))
 theme_set(theme_bw(16) + theme(axis.text.x = element_text(angle = 30, hjust = 1),
                                strip.background = element_blank()))
 
+combine_proposal_by_length <- function(proposal_method, by_length)
+  paste(proposal_method, 'by', ifelse(by_length == 'True', 'length', 'edge'))
+
 ess <- read.csv('output/ess_calls.csv', as.is=TRUE)
 # R 3.1.0 "change"/bug
-ess <- transform(ess, last_ess = as.numeric(last_ess))
+ess <- transform(ess, last_ess = as.numeric(last_ess),
+                 proposal = combine_proposal_by_length(proposal_method, by_length),
+                 n_taxa = paste(n_taxa, 'taxa'),
+                 trim_count = paste('trim', trim_count))
 
 ess$by_length <- ifelse(ess$by_length == 'True', 'by length', 'by edge')
 ```
 
-## Partials updates:
+## Partials updates
 
 Number of likelihood calls required by various proposal methods:
 
 ```{r, fig.width = 12}
-p <- ggplot(ess, aes(x = paste(proposal_method, by_length), y = likelihood_calls)) +
+p <- ggplot(ess, aes(x = proposal, y = likelihood_calls)) +
   geom_boxplot() +
   facet_grid(n_taxa ~ trim_count) +
   scale_y_log10()
 print(p)
 ```
 
-## ... and effective sample size:
+## ... and effective sample size
 
 ```{r, fig.width = 12}
-p <- ggplot(ess, aes(x = paste(proposal_method, by_length), y = last_ess)) +
+p <- ggplot(ess, aes(x = proposal, y = last_ess)) +
   geom_boxplot() +
   facet_grid(n_taxa ~ trim_count)
 print(p)
 ```
 
 ## Comparing the two
+<a id="h-beagle-ops-per-ess"><a>
 
 ```{r, fig.width = 12}
 p <- ggplot(ess, aes(x = paste(proposal_method, by_length), y = likelihood_calls / last_ess)) +
@@ -48,6 +64,7 @@ print(p)
 ```
 
 ## Split probabilities
+<a id="h-split-probabilities"><a>
 
 ```{r, fig.width = 14}
 df <- read.csv('output/pp_comparison.csv', as.is = TRUE)
