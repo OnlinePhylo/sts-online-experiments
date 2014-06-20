@@ -197,8 +197,8 @@ def trimmed_mrbayes_trees(env, outdir, c):
 
 #w.add('particle_factor', [1, 2, 5])
 w.add('particle_factor', [1])
-w.add('proposal_method', ['uniform', 'guided'])
-w.add('by_length', [False, True])
+w.add('proposal_method', ['uniform', 'guided', 'lcfit'])
+w.add('by_length', lambda c: [False, True] if c['proposal_method'] in {'guided', 'lcfit'} else [False])
 
 @w.add_target_with_env(env)
 def sts_online(env, outdir, c):

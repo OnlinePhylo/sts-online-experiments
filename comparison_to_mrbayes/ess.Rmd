@@ -32,6 +32,19 @@ p <- ggplot(ess, aes(x = paste(proposal_method, by_length), y = last_ess)) +
   facet_grid(n_taxa ~ trim_count)
 print(p)
 ```
+
+## Comparing the two
+
+```{r, fig.width = 12}
+p <- ggplot(ess, aes(x = paste(proposal_method, by_length), y = likelihood_calls / last_ess)) +
+  geom_boxplot() +
+  facet_grid(n_taxa ~ trim_count, scales = 'free_y') +
+  scale_y_log10() +
+  xlab('Proposal method') +
+  ylab('# of partials updates per unit ESS')
+print(p)
+```
+
 ## ASDSF
 
 [Average Standard Deviation of Split Frequencies (ASDSF)](http://www.bali-phy.org/README.html#idp54307728)
@@ -51,5 +64,4 @@ p <- ggplot(asdsf, aes(x = proposal, y = asdsf, fill=type)) +
   facet_grid(n_trimmed ~ n_taxa) +
   theme(legend.position = 'bottom')
 print(p)
-
 ```
