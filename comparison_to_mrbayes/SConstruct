@@ -46,8 +46,9 @@ w = SConsWrap(Nest(), dest_dir='output')
 
 # Aggregate
 posterior_comparisons = []
-posterior_comparisons_keys = ('tree', 'n_taxa', 'trim_taxon', 'particle_factor',
-                              'proposal_method', 'by_length')
+posterior_comparisons_keys = ('tree', 'n_taxa', 'trim_taxon', 'trim_count',
+                              'particle_factor', 'proposal_method_name',
+                              'proposal_args')
 
 w.add('tree', trees, label_func=stripext)
 
@@ -196,24 +197,34 @@ def trimmed_mrbayes_trees(env, outdir, c):
 
 
 #w.add('particle_factor', [1, 2, 5])
-w.add('particle_factor', [1])
-w.add('proposal_method', ['uniform', 'guided', 'lcfit'])
-w.add('by_length', lambda c: [False, True] if c['proposal_method'] in {'guided', 'lcfit'} else [False])
+w.add('particle_factor', [1, 2])
+
+@w.add_nest(update=True)
+def proposal_method_name(c):
+    r = [{'proposal_method_name': 'guided-by-edge',
+          'proposal_args': '--proposal-method guided'},
+         {'proposal_method_name': 'guided-hybrid',
+          'proposal_args': '--proposal-method guided --max-length 0.03'},
+         {'proposal_method_name': 'guided-by-length',
+          'proposal_args': '--proposal-method guided --max-length 0.03 --divide-top 3'},
+         {'proposal_method_name': 'lcfit-by-edge',
+          'proposal_args': '--proposal-method lcfit'},
+         {'proposal_method_name': 'lcfit-hybrid',
+          'proposal_args': '--proposal-method lcfit --max-length 0.03'},
+         {'proposal_method_name': 'lcfit-by-length',
+          'proposal_args': '--proposal-method lcfit --max-length 0.03 --divide-top 3'},
+         {'proposal_method_name': 'uniform-by-edge',
+          'proposal_args': '--proposal-method uniform-edge'}]
+
+    return r
+
 
 @w.add_target_with_env(env)
 def sts_online(env, outdir, c):
     j = joiner(outdir)
-    if c['proposal_method'] == 'uniform':
-        env['by_length'] = ''
-        if c['by_length']:
-            env['proposal_method'] = 'uniform-length'
-        else:
-            env['proposal_method'] = 'uniform-edge'
-    else:
-        env['by_length'] = '--max-length 0.03' if c['by_length'] else ''
     result = [env.Command(j(stripext(str(treefile)) + '.sts.json'),
                           ['$fasta', treefile],
-                          'sts-online -p $particle_factor $by_length --proposal-method $proposal_method -b 250 $SOURCES $TARGET')[0]
+                          'sts-online -p $particle_factor $proposal_args -b 250 $SOURCES $TARGET')[0]
             for treefile in c['trimmed_mrbayes_trees']['trees']]
     env.Depends(result, 'bin/sts-online')
     c['pendant_bl'].extend(result)

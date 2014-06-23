@@ -16,17 +16,13 @@ suppressPackageStartupMessages(library(tidyr))
 theme_set(theme_bw(16) + theme(axis.text.x = element_text(angle = 30, hjust = 1),
                                strip.background = element_blank()))
 
-combine_proposal_by_length <- function(proposal_method, by_length)
-  paste(proposal_method, 'by', ifelse(by_length == 'True', 'length', 'edge'))
-
 ess <- read.csv('output/ess_calls.csv', as.is=TRUE)
 # R 3.1.0 "change"/bug
-ess <- transform(ess, last_ess = as.numeric(last_ess),
-                 proposal = combine_proposal_by_length(proposal_method, by_length),
+ess <- transform(ess,
+                 last_ess = as.numeric(last_ess),
+                 proposal = proposal_method_name,
                  n_taxa = paste(n_taxa, 'taxa'),
-                 trim_count = paste('trim', trim_count))
-
-ess$by_length <- ifelse(ess$by_length == 'True', 'by length', 'by edge')
+                 particle_factor = factor(particle_factor))
 ```
 
 ## Partials updates
@@ -34,7 +30,7 @@ ess$by_length <- ifelse(ess$by_length == 'True', 'by length', 'by edge')
 Number of likelihood calls required by various proposal methods:
 
 ```{r, fig.width = 12}
-p <- ggplot(ess, aes(x = proposal, y = likelihood_calls)) +
+p <- ggplot(ess, aes(x = proposal, y = likelihood_calls, fill = particle_factor)) +
   geom_boxplot() +
   facet_grid(n_taxa ~ trim_count) +
   scale_y_log10()
@@ -44,7 +40,7 @@ print(p)
 ## ... and effective sample size
 
 ```{r, fig.width = 12}
-p <- ggplot(ess, aes(x = proposal, y = last_ess)) +
+p <- ggplot(ess, aes(x = proposal, y = last_ess, fill = particle_factor)) +
   geom_boxplot() +
   facet_grid(n_taxa ~ trim_count)
 print(p)
@@ -54,7 +50,7 @@ print(p)
 <a id="h-beagle-ops-per-ess"><a>
 
 ```{r, fig.width = 12}
-p <- ggplot(ess, aes(x = paste(proposal_method, by_length), y = likelihood_calls / last_ess)) +
+p <- ggplot(ess, aes(x = proposal, y = likelihood_calls / last_ess, fill = particle_factor)) +
   geom_boxplot() +
   facet_grid(n_taxa ~ trim_count, scales = 'free_y') +
   scale_y_log10() +
@@ -70,8 +66,8 @@ print(p)
 df <- read.csv('output/pp_comparison.csv', as.is = TRUE)
 df[, c('pp1', 'pp2')] <- sapply(df[, c('pp1', 'pp2')], as.numeric)
 # Single leaf trimming
-df <- transform(subset(df, !grepl('-', trim_taxon)),
-                proposal = paste(proposal_method, 'by', ifelse(by_length == 'True', 'length', 'edge')))
+df <- transform(subset(df, !grepl('-', trim_taxon) & particle_factor == 1),
+                proposal = proposal_method_name)
 
 p <- ggplot(df, aes(x = pp1, y = pp2, color = type)) +
   geom_point() +
@@ -104,9 +100,8 @@ kable(rsq)
 library(stringr)
 asdsf <- read.csv('output/asdsf.csv', as.is=TRUE)
 
-asdsf$by_length <- ifelse(asdsf$by_length == 'True', 'by length', 'by edge')
-asdsf <- transform(asdsf, proposal = paste(proposal_method, by_length),
-                   n_trimmed = paste('trim', str_count(trim_taxon, '-') + 1),
+asdsf <- transform(asdsf, proposal = proposal_method_name,
+                   n_trimmed = paste('trim', n_trim),
                    n_taxa = paste(n_taxa, 'taxa'))
 
 p <- ggplot(asdsf, aes(x = proposal, y = asdsf, fill=type)) +
