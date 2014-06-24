@@ -8,9 +8,10 @@ import sys
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument('-k', '--keys', default=['proposal_method', 'trim_count',
-                                            'keep_count', 'trim_taxon',
-                                            'particle_factor', 'by_length',
+    p.add_argument('-k', '--keys', default=['proposal_method_name',
+                                            'trim_count', 'keep_count',
+                                            'trim_taxon', 'particle_factor',
+                                            'trim_count',
                                             'n_taxa', 'tree'],
                    type=lambda s: s.split(','),
                    help="""Additional keys""")

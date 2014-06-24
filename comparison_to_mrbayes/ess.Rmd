@@ -1,9 +1,10 @@
-# STS proposal comparison
-
-New:
-
-* [Number of BEAGLE update partials operations per unit increase in ESS](#h-beagle-ops-per-ess)
-* [Posterior split frequency comparison](#h-split-probabilities)
+---
+title: "STS proposal comparison"
+output:
+  html_document:
+    toc: true
+    theme: cerulean
+---
 
 `r paste(system2('bin/sts-online', '--version', stdout=TRUE), collapse='')`.
 
@@ -47,7 +48,6 @@ print(p)
 ```
 
 ## Comparing the two
-<a id="h-beagle-ops-per-ess"><a>
 
 ```{r, fig.width = 12}
 p <- ggplot(ess, aes(x = proposal, y = likelihood_calls / last_ess, fill = particle_factor)) +
@@ -60,7 +60,6 @@ print(p)
 ```
 
 ## Split probabilities
-<a id="h-split-probabilities"><a>
 
 ```{r, fig.width = 14}
 df <- read.csv('output/pp_comparison.csv', as.is = TRUE)
@@ -77,19 +76,21 @@ p <- ggplot(df, aes(x = pp1, y = pp2, color = type)) +
 print(p)
 
 # Coefficient of determination
+calc_rsq <- function(pp1, pp2) summary(lm(pp2 ~ pp1 + 0))$r.squared
+
 rsq <- group_by(df, type, proposal, n_taxa) %>%
-  summarize(r_sq = 1 - sum((pp2 - pp1)^2) / sum((pp2 - mean(pp2))^2),
+  summarize(rsq = calc_rsq(pp1, pp2),
             mse = mean((pp1 - pp2)^2)) %>%
-  gather(variable, value, r_sq:mse) %>%
+  gather(variable, value, rsq:mse) %>%
   unite(var, variable, type) %>%
   spread(var, value) %>%
   select(-`mse_mrbayes-mrbayes`) %>%
-  arrange(-`r_sq_mrbayes-sts`)
+  arrange(-`rsq_mrbayes-sts`)
 ```
 
 #### Coefficient of determination
 ```{r, results = 'asis'}
-kable(rsq)
+knitr::kable(rsq)
 ```
 
 ## ASDSF
@@ -101,7 +102,7 @@ library(stringr)
 asdsf <- read.csv('output/asdsf.csv', as.is=TRUE)
 
 asdsf <- transform(asdsf, proposal = proposal_method_name,
-                   n_trimmed = paste('trim', n_trim),
+                   n_trimmed = paste('trim', trim_count),
                    n_taxa = paste(n_taxa, 'taxa'))
 
 p <- ggplot(asdsf, aes(x = proposal, y = asdsf, fill=type)) +

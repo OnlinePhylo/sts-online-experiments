@@ -42,7 +42,7 @@ env['BUILDERS']['MrBayesConf'] = Builder(action='generate_mb.py --runs $MB_NRUNS
 
 natural_extension = env.SConscript('src/SConscript')
 
-w = SConsWrap(Nest(), dest_dir='output')
+w = SConsWrap(Nest(), dest_dir='output', alias_environment=env)
 
 # Aggregate
 posterior_comparisons = []
@@ -151,7 +151,7 @@ def full_mrbayes_consensus(env, outdir, c):
             #'natural_extension.output_path=$TARGET')[0]
 
 
-w.add('trim_replicates', [5], create_dir=False)
+w.add('trim_replicates', [3], create_dir=False)
 w.add('trim_count', [1, 2], create_dir=False)
 
 
@@ -182,19 +182,18 @@ def trimmed_nexus(env, outdir, c):
 
 @w.add_target_with_env(env)
 def trimmed_mrbayes_config(env, outdir, c):
+    env['MB_NRUNS'] = 1
     return env.MrBayesConf(c['trimmed_nexus'])[0]
 
 @w.add_target_with_env(env)
 def trimmed_mrbayes_trees(env, outdir, c):
-    targets = ['$OUTDIR/${{trim_base}}.run{0}.{1}'.format(i, j)
-               for j in ('t', 'p')
-               for i in xrange(1, env['MB_NRUNS'] + 1)]
+    env['MB_NRUNS'] = 1
+    targets = ['$OUTDIR/${{trim_base}}.{0}'.format(j) for j in ('t', 'p')]
     res = env.SRun(targets,
                    ['$trimmed_mrbayes_config', '$trimmed_nexus'],
                    'mb $SOURCE && sed -i -e "s/e+00//g" $TARGETS')
     return {'trees': res[:env['MB_NRUNS']],
-            'params': res[env['MB_NRUNS']:]}
-
+            'params': res[:env['MB_NRUNS']]}
 
 #w.add('particle_factor', [1, 2, 5])
 w.add('particle_factor', [1, 2])
@@ -203,17 +202,17 @@ w.add('particle_factor', [1, 2])
 def proposal_method_name(c):
     r = [{'proposal_method_name': 'guided-by-edge',
           'proposal_args': '--proposal-method guided'},
-         {'proposal_method_name': 'guided-hybrid',
-          'proposal_args': '--proposal-method guided --max-length 0.03'},
          {'proposal_method_name': 'guided-by-length',
+          'proposal_args': '--proposal-method guided --max-length 0.03'},
+         {'proposal_method_name': 'guided-hybrid',
           'proposal_args': '--proposal-method guided --max-length 0.03 --divide-top 3'},
          {'proposal_method_name': 'lcfit-by-edge',
           'proposal_args': '--proposal-method lcfit'},
-         {'proposal_method_name': 'lcfit-hybrid',
-          'proposal_args': '--proposal-method lcfit --max-length 0.03'},
          {'proposal_method_name': 'lcfit-by-length',
+          'proposal_args': '--proposal-method lcfit --max-length 0.03'},
+         {'proposal_method_name': 'lcfit-hybrid',
           'proposal_args': '--proposal-method lcfit --max-length 0.03 --divide-top 3'},
-         {'proposal_method_name': 'uniform-by-edge',
+         {'proposal_method_name': 'uniform-by-length',
           'proposal_args': '--proposal-method uniform-edge'}]
 
     return r
