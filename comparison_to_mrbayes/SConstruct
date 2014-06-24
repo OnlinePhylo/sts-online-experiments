@@ -225,7 +225,7 @@ def sts_online(env, outdir, c):
     result = [env.Command(j(stripext(str(treefile)) + '.sts.json'),
                           ['$fasta', treefile],
                           'sts-online -p $particle_factor $proposal_args -b 250 $SOURCES $TARGET')[0]
-            for treefile in c['trimmed_mrbayes_trees']['trees']]
+              for treefile in c['trimmed_mrbayes_trees']['trees'][:1]]
     env.Depends(result, 'bin/sts-online')
     c['pendant_bl'].extend(result)
     return result
