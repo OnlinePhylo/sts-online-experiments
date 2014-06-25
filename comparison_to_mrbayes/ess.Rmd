@@ -65,20 +65,24 @@ print(p)
 df <- read.csv('output/pp_comparison.csv', as.is = TRUE)
 df[, c('pp1', 'pp2')] <- sapply(df[, c('pp1', 'pp2')], as.numeric)
 # Single leaf trimming
-df <- transform(subset(df, !grepl('-', trim_taxon) & particle_factor == 1),
+df <- transform(subset(df, !grepl('-', trim_taxon)),
                 proposal = proposal_method_name)
 
-p <- ggplot(df, aes(x = pp1, y = pp2, color = type)) +
-  geom_point() +
-  facet_grid(n_taxa ~ proposal, scales = 'free_y') +
-  coord_equal() +
-  theme(legend.position = 'bottom')
-print(p)
+plt <- function(df)
+  ggplot(df, aes(x = pp1, y = pp2, color = type)) +
+    geom_point() +
+    facet_grid(n_taxa ~ proposal, scales = 'free_y') +
+    coord_equal() +
+    theme(legend.position = 'bottom')
+
+for(pf in unique(df$particle_factor))
+  print(subset(df, particle_factor == pf) %>%
+        plt(.) + ggtitle(paste("Particle factor", pf)))
 
 # Coefficient of determination
 calc_rsq <- function(pp1, pp2) summary(lm(pp2 ~ pp1 + 0))$r.squared
 
-rsq <- group_by(df, type, proposal, n_taxa) %>%
+rsq <- group_by(df, type, proposal, n_taxa, particle_factor) %>%
   summarize(rsq = calc_rsq(pp1, pp2),
             mse = mean((pp1 - pp2)^2)) %>%
   gather(variable, value, rsq:mse) %>%
@@ -101,11 +105,13 @@ knitr::kable(rsq)
 library(stringr)
 asdsf <- read.csv('output/asdsf.csv', as.is=TRUE)
 
-asdsf <- transform(asdsf, proposal = proposal_method_name,
+asdsf <- transform(asdsf,
+                   proposal = proposal_method_name,
                    n_trimmed = paste('trim', trim_count),
-                   n_taxa = paste(n_taxa, 'taxa'))
+                   n_taxa = paste(n_taxa, 'taxa'),
+                   type_factor = ifelse(type == 'mrbayes-mrbayes', type, paste(type, particle_factor)))
 
-p <- ggplot(asdsf, aes(x = proposal, y = asdsf, fill=type)) +
+p <- ggplot(asdsf, aes(x = proposal, y = asdsf, fill=type_factor)) +
   geom_boxplot() +
   geom_hline(yintercept = 0.01, linetype = 'dashed') +
   facet_grid(n_trimmed ~ n_taxa) +

@@ -196,7 +196,7 @@ def trimmed_mrbayes_trees(env, outdir, c):
             'params': res[:env['MB_NRUNS']]}
 
 #w.add('particle_factor', [1, 2, 5])
-w.add('particle_factor', [1, 2])
+w.add('particle_factor', [1, 2, 4])
 
 @w.add_nest(update=True)
 def proposal_method_name(c):
