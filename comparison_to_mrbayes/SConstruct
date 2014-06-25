@@ -247,9 +247,10 @@ pp_files = []
 def sts_asdsf_comparison(env, outdir, c):
     env['kvs'] = ' '.join('{0}="{1}"'.format(k, c.get(k, '')) for k in posterior_comparisons_keys)
 
-    asdsf, pp = env.Local(['$OUTDIR/asdsf.csv', '$OUTDIR/pp.csv'],
-                          env.Flatten([c['full_mrbayes_trees']['trees'], c['sts_online']]),
-                          'asdsf.py $SOURCES --pp-table ${TARGETS[1]} | decorate_csv.py $kvs > $TARGET')
+    asdsf, pp = env.Command(['$OUTDIR/asdsf.csv', '$OUTDIR/pp.csv'],
+                            env.Flatten([c['full_mrbayes_trees']['trees'], c['sts_online']]),
+                            'asdsf.py $SOURCES --pp-table ${TARGETS[1]} | '
+                            'decorate_csv.py $kvs > $TARGET')
     pp_files.extend(env.Local('$OUTDIR/pp_annot.csv', pp,
                               'decorate_csv.py $kvs < $SOURCE > $TARGET'))
 
