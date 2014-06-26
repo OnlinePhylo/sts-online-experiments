@@ -114,7 +114,9 @@ asdsf <- transform(asdsf,
 p <- ggplot(asdsf, aes(x = proposal, y = asdsf, fill=type_factor)) +
   geom_boxplot() +
   geom_hline(yintercept = 0.01, linetype = 'dashed') +
-  facet_grid(n_trimmed ~ n_taxa) +
+  facet_grid(n_taxa ~ n_trimmed, scales = 'free_y') +
   theme(legend.position = 'bottom')
 print(p)
 ```
+
+(note changing y scale)
