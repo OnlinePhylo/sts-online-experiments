@@ -38,7 +38,7 @@ def trees(env, outdir, c):
     nexus, tree = env.Local(
         ['$OUTDIR/pruned.nex', '$OUTDIR/full.tre'],
         [],
-        'generate-trees.py --count 100 --distance $branch_length $TARGETS')
+        'generate-trees.py --count 5000 --distance $branch_length $TARGETS')
     env.Depends([nexus, tree], 'bin/generate-trees.py')
     return {'nexus': nexus, 'tree': tree}
 
@@ -62,7 +62,7 @@ def fasta(env, outdir, c):
                      'output.sequence.file=$TARGET '
                      'output.sequence.format=Fasta '
                      'alphabet=DNA '
-                     'number_of_sites=5000 '
+                     'number_of_sites=1000 '
                      'rate_distribution=Constant '
                      'model=JC69 ')[0]
 
@@ -90,7 +90,7 @@ def sts_online(env, outdir, c):
     j = joiner(outdir)
     result = env.Command(j(stripext(str(c['trees']['nexus'])) + '.sts.json'),
                           ['$fasta', c['trees']['nexus']],
-                          'sts-online -p 10 --proposal-method $proposal_method $SOURCES $TARGET')[0]
+                          'sts-online --proposal-method $proposal_method $SOURCES $TARGET')[0]
     env.Depends(result, 'bin/sts-online')
     return result
 

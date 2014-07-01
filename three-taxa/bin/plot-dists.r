@@ -23,12 +23,14 @@ tryCatch({
   p <- ggplot(comp, aes(x = length, weight = weight)) +
     geom_density(aes(color = type)) +
     geom_vline(aes(xintercept = length), linetype = 'dashed', data = ml_bl) +
-    facet_grid(proposal_method ~ seed) +
+    facet_grid(proposal_method ~ seed, scales= 'free_y') +
     theme(legend.position = 'bottom') +
     xlab("Branch length") +
     ggtitle(paste("branch length ", unique(comp$branch_length)))
   if(all(comp$branch_length < 0.05))
     p <- p + xlim(0, 0.1)
     #ggtitle(sprintf("sim_bl=%.2f seed=%d proposal=%s", control$branch_length, control$seed, control$proposal_method)) +
+  else
+    p <- p + xlim(0, 0.4)
   print(p)
 }, finally = dev.off())
