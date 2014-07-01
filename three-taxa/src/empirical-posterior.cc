@@ -73,7 +73,7 @@ int run_main(int argc, char**argv)
     double exp_mean = bpp::ApplicationTools::getDoubleParameter("empirical-posterior.exp_mean", params, 0.1, "", false);
 
     // Number of points
-    size_t steps = static_cast<size_t>(bpp::ApplicationTools::getIntParameter("empirical-posterior.steps", params, 200, "", false));
+    size_t steps = static_cast<size_t>(bpp::ApplicationTools::getIntParameter("empirical-posterior.steps", params, 1000, "", false));
 
     // Output
     std::string output_path = bpp::ApplicationTools::getAFilePath("empirical-posterior.output_path", params, true, false);
@@ -84,7 +84,7 @@ int run_main(int argc, char**argv)
     output_fp << "branch_length,prior,likelihood,posterior\n";
 
     const int node_id = tree->getLeafId(new_taxon);
-    double min_bl = 1e-6, max_bl = 2.0;
+    double min_bl = 1e-6, max_bl = 1.0;
     double step = max_bl / steps;
 
     for(size_t i = 0; i < steps; i++) {

@@ -13,8 +13,8 @@ def main():
     p.add_argument('tree', type=argparse.FileType('w'))
     a = p.parse_args()
 
-    tree_full = '((A:0.0,B:0.0):0.0,C:{0});'.format(a.distance)
-    tree = '(A:0.0,B:0.0);'
+    tree_full = '((A:1e-6,B:1e-6):0.0,C:{0});'.format(a.distance)
+    tree = '(A:1e-6,B:1e-6);'
 
     with a.tree as fp:
         fp.write(tree_full + '\n')

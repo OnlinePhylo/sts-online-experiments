@@ -3,16 +3,13 @@
 from __future__ import division
 
 import glob
-import itertools
 import os
 import os.path
-import re
 import functools
 
 from nestly import Nest, stripext
 from nestly.scons import SConsWrap
 from bioscons.slurm import SlurmEnvironment
-from SCons.Script import Builder
 
 def joiner(*args):
     return functools.partial(os.path.join, *args)
@@ -30,8 +27,9 @@ env['outdir'] = 'output'
 
 w = SConsWrap(Nest(), dest_dir='output', alias_environment=env)
 
-
+w.add_aggregate('all_annot', list)
 w.add('branch_length', [0.01, 0.1, 0.2])
+w.add_aggregate('all_dist_comparisons', list)
 w.add('seed', range(10))
 
 
@@ -40,7 +38,7 @@ def trees(env, outdir, c):
     nexus, tree = env.Local(
         ['$OUTDIR/pruned.nex', '$OUTDIR/full.tre'],
         [],
-        'generate-trees.py --distance $branch_length $TARGETS')
+        'generate-trees.py --count 100 --distance $branch_length $TARGETS')
     env.Depends([nexus, tree], 'bin/generate-trees.py')
     return {'nexus': nexus, 'tree': tree}
 
@@ -64,7 +62,7 @@ def fasta(env, outdir, c):
                      'output.sequence.file=$TARGET '
                      'output.sequence.format=Fasta '
                      'alphabet=DNA '
-                     'number_of_sites=1000 '
+                     'number_of_sites=5000 '
                      'rate_distribution=Constant '
                      'model=JC69 ')[0]
 
@@ -84,218 +82,65 @@ def empirical_posterior(env, outdir, c):
     return result
 
 
+w.add('proposal_method', ['guided', 'lcfit', 'uniform-edge'])
+
 
 @w.add_target_with_env(env)
 def sts_online(env, outdir, c):
     j = joiner(outdir)
     result = env.Command(j(stripext(str(c['trees']['nexus'])) + '.sts.json'),
                           ['$fasta', c['trees']['nexus']],
-                          'sts-online -p 10 --proposal-method uniform-edge $SOURCES $TARGET')[0]
+                          'sts-online -p 10 --proposal-method $proposal_method $SOURCES $TARGET')[0]
     env.Depends(result, 'bin/sts-online')
     return result
 
 
-#@w.add_target_with_env(env)
-#def full_phylip(env, outdir, c):
-    #return env.ConvertToPhyx(c['fasta'])[0]
+@w.add_target_with_env(env)
+def comparison(env, outdir, c):
+    j = joiner(outdir)
+    result, = env.Command(j('bl_comparison.json'),
+                          [c['sts_online'], c['empirical_posterior']],
+                          'compare-dists.py $SOURCES -o $TARGET')
+    return result
+
+w.add_controls(env)
 
 
-#@w.add_target_with_env(env)
-#def phyml_tree(env, outdir, c):
-    #return env.Command('${full_phylip}_phyml_tree.txt',
-            #['$full_phylip', '$tree'],
-            #'phyml -i ${SOURCES[0]} -u ${SOURCES[1]} -c 1 -m JC69 -o l -b 0')[0]
+@w.add_target_with_env(env)
+def annotated_comparison(env, outdir, c):
+    r, = env.Local('$OUTDIR/bl_comparison_annot.json',
+                   [c['control'], c['comparison']],
+                   "jq -s '.[0] + .[1]' $SOURCES > $TARGET")
+    c['all_annot'].append(r)
+    return r
 
 
-#@w.add_target_with_env(env)
-#def full_nexus(env, outdir, c):
-    #j = joiner(outdir)
-    #fasta = str(c['fasta'])
-    #return env.ConvertToNexus(j(stripext(fasta) + '.nex'), fasta)[0]
+@w.add_target_with_env(env)
+def distribution_comp_csv(env, outdir, c):
+    env['kvs'] = ('proposal_method=$proposal_method '
+                  'seed=$seed branch_length=$branch_length')
+    r, = env.Local('$OUTDIR/bl_comparison.csv',
+                   [c['sts_online'], c['empirical_posterior'], c['control']],
+                   'compare-dists.r ${SOURCES[:2]} /dev/stdout | '
+                   'decorate-csv.py $kvs > $TARGET')
+    c['all_dist_comparisons'].append(r)
+
+w.pop('seed')
 
 
-#@w.add_target_with_env(env)
-#def full_mrbayes_config(env, outdir, c):
-    #return env.MrBayesConf(c['full_nexus'])[0]
+@w.add_target_with_env(env)
+def plot_proposal_comparisons(env, outdir, c):
+    stacked, = env.Local('$OUTDIR/bl_comparison.csv',
+                         c['all_dist_comparisons'],
+                         'csvstack $SOURCES > $TARGET')
+    plotted, = env.Local('$OUTDIR/bl_comparison.pdf',
+                         stacked,
+                         'plot-dists.r $SOURCE $TARGET')
 
+w.pop('branch_length')
 
-#@w.add_target_with_env(env)
-#def full_mrbayes_trees(env, outdir, c):
-    #j = joiner(outdir)
-    #targets = [j('{0}.run{1}.{2}'.format(stripext(str(c['full_nexus'])), i, t))
-               #for t in ('t', 'p')
-               #for i in xrange(1, env['MB_NRUNS'] + 1)]
-    #res = env.SRun(targets, c['full_mrbayes_config'],
-                   #'mb $SOURCE && sed -i -e "s/e+00//g" $TARGETS')
-    #res = {'trees': res[:env['MB_NRUNS']],
-           #'params': res[env['MB_NRUNS']:]}
-    #j = joiner(outdir)
-    #env['kvs'] = ' '.join('{0}="{1}"'.format(k, c.get(k, '')) for k in posterior_comparisons_keys)
+@w.add_target_with_env(env)
+def annotated_plots(env, outdir, c):
+    rep, = env.Local('report.html', env.Flatten(['report.Rmd', c['all_annot']]),
+                     """R --slave -e 'rmarkdown::render("$SOURCE")' --args ${SOURCES[2:]}""")
 
-    #pc = [env.Local(j(stripext(str(t)) + '.comp.csv'),
-                    #[c['phyml_tree'], t],
-                    #'compare_posterior_topologies.py -b 250 $SOURCES | decorate_csv.py $kvs type=MrBayes > $TARGET')
-            #for t in res['trees']]
-    #posterior_comparisons.extend(pc)
-
-    #return res
-
-
-#@w.add_target_with_env(env)
-#def full_mrbayes_newick(env, outdir, c):
-    #return [env.NexusToNewick(t)[0] for t in c['full_mrbayes_trees']['trees']]
-
-
-#@w.add_target_with_env(env)
-#def full_mrbayes_consensus(env, outdir, c):
-    #return [env.Command('$OUTDIR/' + stripext(str(t)) + '.sum.tre',
-                        #t,
-                        #'sumtrees.py -q -b 250 $SOURCE > $TARGET')[0] for t in c['full_mrbayes_trees']['trees']]
-
-
-##@w.add_target_with_env(env)
-##def full_natural_extension(env, outdir, c):
-    ##sources = [natural_extension,
-               ##c['full_mrbayes_trees']['trees'][0],
-               ##c['fasta']]
-    ##targets = '$OUTDIR/natural_extension.csv'
-    ##return env.Command(targets, sources,
-            ##'${SOURCES[0]} input.sequence.file=${SOURCES[2]} '
-            ##'natural_extension.trees_nexus=${SOURCES[1]} '
-            ##'natural_extension.prune_taxon=$trim_taxon '
-            ##'natural_extension.burnin=250 '
-            ##'natural_extension.output_path=$TARGET')[0]
-
-
-#w.add('trim_replicates', [3], create_dir=False)
-#w.add('trim_count', [1, 2], create_dir=False)
-
-
-#def trim_taxon(c):
-    #all_taxa = ['t{0}'.format(i+1) for i in xrange(c['n_taxa'])]
-
-    #if c['trim_count'] == 1:
-        #return all_taxa[:c['trim_replicates']]
-    #else:
-        #combinations = ('-'.join(c) for c in itertools.combinations(all_taxa, c['trim_count']))
-        #return list(itertools.islice(combinations, 0, c['trim_replicates']))
-
-#w.add('keep_count', lambda c: [c['n_taxa'] - c['trim_count']],
-      #create_dir=False)
-
-#w.add('trim_taxon', trim_taxon)
-
-#w.add('trim_base', lambda c: ['{n_taxa:02d}tax_trim_$trim_taxon'.format(**c)],
-      #create_dir=False)
-
-
-#@w.add_target_with_env(env)
-#def trimmed_nexus(env, outdir, c):
-    #return env.Local('$OUTDIR/${trim_base}.nex',
-            #'$full_nexus',
-            #"seqmagick convert --pattern-exclude '^(" + c['trim_taxon'].replace('-', '|') + ")$'  --input-format "
-            #'nexus --alphabet dna $SOURCE $TARGET')[0]
-
-#@w.add_target_with_env(env)
-#def trimmed_mrbayes_config(env, outdir, c):
-    #env['MB_NRUNS'] = 1
-    #return env.MrBayesConf(c['trimmed_nexus'])[0]
-
-#@w.add_target_with_env(env)
-#def trimmed_mrbayes_trees(env, outdir, c):
-    #env['MB_NRUNS'] = 1
-    #targets = ['$OUTDIR/${{trim_base}}.{0}'.format(j) for j in ('t', 'p')]
-    #res = env.SRun(targets,
-                   #['$trimmed_mrbayes_config', '$trimmed_nexus'],
-                   #'mb $SOURCE && sed -i -e "s/e+00//g" $TARGETS')
-    #return {'trees': res[:env['MB_NRUNS']],
-            #'params': res[:env['MB_NRUNS']]}
-
-##w.add('particle_factor', [1, 2, 5])
-#w.add('particle_factor', [1, 2, 4])
-
-#@w.add_nest(update=True)
-#def proposal_method_name(c):
-    #r = [{'proposal_method_name': 'guided-by-edge',
-          #'proposal_args': '--proposal-method guided'},
-         #{'proposal_method_name': 'guided-by-length',
-          #'proposal_args': '--proposal-method guided --max-length 0.03'},
-         #{'proposal_method_name': 'guided-hybrid',
-          #'proposal_args': '--proposal-method guided --max-length 0.03 --divide-top 3'},
-         #{'proposal_method_name': 'lcfit-by-edge',
-          #'proposal_args': '--proposal-method lcfit'},
-         #{'proposal_method_name': 'lcfit-by-length',
-          #'proposal_args': '--proposal-method lcfit --max-length 0.03'},
-         #{'proposal_method_name': 'lcfit-hybrid',
-          #'proposal_args': '--proposal-method lcfit --max-length 0.03 --divide-top 3'},
-         #{'proposal_method_name': 'uniform-by-length',
-          #'proposal_args': '--proposal-method uniform-edge'}]
-
-    #return r
-
-
-#@w.add_target_with_env(env)
-#def sts_online(env, outdir, c):
-    #j = joiner(outdir)
-    #result = [env.Command(j(stripext(str(treefile)) + '.sts.json'),
-                          #['$fasta', treefile],
-                          #'sts-online -p $particle_factor $proposal_args -b 250 $SOURCES $TARGET')[0]
-              #for treefile in c['trimmed_mrbayes_trees']['trees'][:1]]
-    #env.Depends(result, 'bin/sts-online')
-    #c['pendant_bl'].extend(result)
-    #return result
-
-#@w.add_target_with_env(env)
-#def sts_posterior_comparison(env, outdir, c):
-    #j = joiner(outdir)
-    #env['kvs'] = ' '.join('{0}="{1}"'.format(k, c.get(k, '')) for k in posterior_comparisons_keys)
-
-    #res = [env.Local(j(stripext(str(t)) + '.comp.csv'),
-                     #[c['phyml_tree'], t],
-                     #'compare_posterior_topologies.py $SOURCES | decorate_csv.py $kvs type=sts-online > $TARGET')
-            #for t in c['sts_online']]
-    #posterior_comparisons.extend(res)
-    #return res
-
-#asdsf_files = []
-#pp_files = []
-#@w.add_target_with_env(env)
-#def sts_asdsf_comparison(env, outdir, c):
-    #env['kvs'] = ' '.join('{0}="{1}"'.format(k, c.get(k, '')) for k in posterior_comparisons_keys)
-
-    #asdsf, pp = env.Command(['$OUTDIR/asdsf.csv', '$OUTDIR/pp.csv'],
-                            #env.Flatten([c['full_mrbayes_trees']['trees'], c['sts_online']]),
-                            #'asdsf.py $SOURCES --pp-table ${TARGETS[1]} | '
-                            #'decorate_csv.py $kvs > $TARGET')
-    #pp_files.extend(env.Local('$OUTDIR/pp_annot.csv', pp,
-                              #'decorate_csv.py $kvs < $SOURCE > $TARGET'))
-
-    ##'asdsf.py --pp-table=- -o /dev/null $SOURCES | decorate_csv.py $kvs > $TARGET')
-
-    #asdsf_files.append(asdsf)
-    #return asdsf
-
-#w.add_controls(env)
-#controls = [i['control'] for _, i in w]
-#ess_calls = env.Local('$outdir/ess_calls.csv',
-                      #controls,
-                      #'python bin/extract_ess_like.py -o $TARGET $SOURCES')
-
-#w.pop('trim_replicates')
-
-
-#@w.add_target_with_env(env)
-#def pendant_bl_ess(env, outdir, c):
-    #env.Local(os.path.join(outdir, 'pendant_bl_ess.csv'),
-              #env.Flatten([c['tree'], c['pendant_bl']]),
-              #'pendant_bl.py $SOURCES -o $TARGET')
-
-#all_pp_comparison = env.Local('$outdir/pp_comparison.csv',
-                              #pp_files, 'csvstack $SOURCES > $TARGET')
-
-#all_posterior_comparison = env.Local('$outdir/posterior_comparison.csv',
-                                     #posterior_comparisons, 'csvstack $SOURCES > $TARGET')
-#all_asdsf = env.Local('$outdir/asdsf.csv',
-                      #asdsf_files, 'csvstack $SOURCES > $TARGET')
-#all_posterior_plot = env.Local(['$outdir/posterior_comparison_all.pdf', '$outdir/posterior_comparison_byntaxa.pdf'],
-                               #all_posterior_comparison, 'plot_posterior_rf.R $SOURCE $TARGETS')
