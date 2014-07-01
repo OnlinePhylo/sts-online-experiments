@@ -28,9 +28,9 @@ tryCatch({
     xlab("Branch length") +
     ggtitle(paste("branch length ", unique(comp$branch_length)))
   if(all(comp$branch_length < 0.05))
-    p <- p + xlim(0, 0.1)
+    p <- p + xlim(0, 0.1) + ylim(0, 150)
     #ggtitle(sprintf("sim_bl=%.2f seed=%d proposal=%s", control$branch_length, control$seed, control$proposal_method)) +
   else
-    p <- p + xlim(0, 0.4)
+    p <- p + xlim(0, 0.5)
   print(p)
 }, finally = dev.off())

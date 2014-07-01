@@ -28,8 +28,9 @@ env['outdir'] = 'output'
 w = SConsWrap(Nest(), dest_dir='output', alias_environment=env)
 
 w.add_aggregate('all_annot', list)
+w.add_aggregate('all_dists', list)
 w.add('branch_length', [0.01, 0.1, 0.2])
-w.add_aggregate('all_dist_comparisons', list)
+w.add_aggregate('dist_comparisons', list)
 w.add('seed', range(10))
 
 
@@ -62,7 +63,7 @@ def fasta(env, outdir, c):
                      'output.sequence.file=$TARGET '
                      'output.sequence.format=Fasta '
                      'alphabet=DNA '
-                     'number_of_sites=1000 '
+                     'number_of_sites=10 '
                      'rate_distribution=Constant '
                      'model=JC69 ')[0]
 
@@ -123,7 +124,7 @@ def distribution_comp_csv(env, outdir, c):
                    [c['sts_online'], c['empirical_posterior'], c['control']],
                    'compare-dists.r ${SOURCES[:2]} /dev/stdout | '
                    'decorate-csv.py $kvs > $TARGET')
-    c['all_dist_comparisons'].append(r)
+    c['dist_comparisons'].append(r)
 
 w.pop('seed')
 
@@ -131,11 +132,12 @@ w.pop('seed')
 @w.add_target_with_env(env)
 def plot_proposal_comparisons(env, outdir, c):
     stacked, = env.Local('$OUTDIR/bl_comparison.csv',
-                         c['all_dist_comparisons'],
+                         c['dist_comparisons'],
                          'csvstack $SOURCES > $TARGET')
-    plotted, = env.Local('$OUTDIR/bl_comparison.pdf',
-                         stacked,
-                         'plot-dists.r $SOURCE $TARGET')
+    plot, = env.Local('$OUTDIR/bl_comparison.pdf',
+                      stacked,
+                      'plot-dists.r $SOURCE $TARGET')
+    c['all_dists'].append(plot)
 
 w.pop('branch_length')
 
@@ -143,4 +145,11 @@ w.pop('branch_length')
 def annotated_plots(env, outdir, c):
     rep, = env.Local('report.html', env.Flatten(['report.Rmd', c['all_annot']]),
                      """R --slave -e 'rmarkdown::render("$SOURCE")' --args ${SOURCES[2:]}""")
+
+
+@w.add_target_with_env(env)
+def combined_dist_plots(env, outdir, c):
+    rep, = env.Local('$OUTDIR/bl_comparison.pdf',
+                     c['all_dists'],
+                     'pdftk $SOURCES cat output $TARGET')
 

@@ -90,10 +90,14 @@ int run_main(int argc, char**argv)
     for(size_t i = 0; i < steps; i++) {
         const double branch_length = min_bl + i * step;
         tree->setDistanceToFather(node_id, branch_length);
+        double prior = 0.0;
+        for(const double bl : tree->getBranchLengths()) {
+            prior += std::log(gsl_ran_exponential_pdf(bl, exp_mean));
+        }
+
         bpp::RHomogeneousTreeLikelihood orig_like(*tree, *sites, model.get(), rate_dist.get(), true, false);
         orig_like.initialize();
         const double ll = orig_like.getLogLikelihood();
-        const double prior = std::log(gsl_ran_exponential_pdf(branch_length, exp_mean));
         output_fp << branch_length << ',' << prior << ',' << ll << ',' << prior + ll << '\n';
     }
 
