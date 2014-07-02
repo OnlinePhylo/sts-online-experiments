@@ -29,12 +29,3 @@ both <- group_by(both, type) %>%
   ungroup()
 
 write.csv(both, outfile, row.names=FALSE)
-#pdf(outfile, width = 7, height = 5, useDingbats = FALSE)
-#tryCatch({
-  #p <- ggplot(both, aes(x = length, weight = weight, color=type)) +
-    #geom_density() +
-    #geom_vline(xintercept = control$branch_length, linetype = 'dashed') +
-    #ggtitle(sprintf("sim_bl=%.2f seed=%d proposal=%s", control$branch_length, control$seed, control$proposal_method)) +
-    #xlab("Branch length")
-  #print(p)
-#}, finally = dev.off())

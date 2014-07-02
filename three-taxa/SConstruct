@@ -122,7 +122,7 @@ def distribution_comp_csv(env, outdir, c):
                   'seed=$seed branch_length=$branch_length')
     r, = env.Local('$OUTDIR/bl_comparison.csv',
                    [c['sts_online'], c['empirical_posterior'], c['control']],
-                   'compare-dists.r ${SOURCES[:2]} /dev/stdout | '
+                   'sleep 5 && compare-dists.r ${SOURCES[:2]} /dev/stdout | '
                    'decorate-csv.py $kvs > $TARGET')
     c['dist_comparisons'].append(r)
 
