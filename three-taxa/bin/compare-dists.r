@@ -6,11 +6,12 @@ suppressPackageStartupMessages(library(jsonlite))
 
 args <- commandArgs(TRUE)
 
-stopifnot(length(args) == 3)
+stopifnot(length(args) == 4)
 
 sts_output_path <- args[1]
-empirical_output_path <- args[2]
-outfile <- args[3]
+mb_output_path <- args[2]
+empirical_output_path <- args[3]
+outfile <- args[4]
 
 sts_doc <- fromJSON(sts_output_path)
 control <- fromJSON(file.path(dirname(sts_output_path), 'control.json'))
@@ -22,8 +23,13 @@ empirical_length <- transform(empirical_length,
                               length = branch_length,
                               weight = exp(posterior - max(posterior)),
                               type = 'empirical')
+mb_length <- read.delim(mb_output_path, as.is = TRUE, skip = 1, sep = '\t')
+mb_length <- transform(mb_length,
+                       length = TL,
+                       weight = rep(1, nrow(mb_length)),
+                       type = 'mb')
 sel <- c('length', 'weight', 'type')
-both <- rbind(sts_length[, sel], empirical_length[, sel])
+both <- rbind(sts_length[, sel], empirical_length[, sel], mb_length[, sel])
 both <- group_by(both, type) %>%
   mutate(weight = weight / sum(weight)) %>%
   ungroup()

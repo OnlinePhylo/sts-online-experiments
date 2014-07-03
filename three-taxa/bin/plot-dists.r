@@ -11,6 +11,7 @@ input_path <- args[1]
 output_path <- args[2]
 
 comp <- read.csv(input_path, as.is=TRUE)
+comp$length <- as.numeric(comp$length)
 
 ml_bl <- group_by(comp, proposal_method, seed) %>%
   filter(type == 'empirical') %>%

@@ -51,6 +51,22 @@ For new branch $t$, the prior $P(t)$ and the proposal density $q(\cdot)$ will ca
 
 **TODO**: what about the bisected branch?
 
+## Branch length
+
+```{r}
+tl <- rbind(data.frame(branch_length = doc[['trees']][['treeLength']], type = 'sts'),
+            data.frame(branch_length = rexp(5000, rate = 1 / 0.1), type = 'prior'))
+
+p2 <- ggplot(tl, aes(x = branch_length, color = type)) +
+  geom_density() +
+  xlab("Pendant length")
+print(p2)
+
+group_by(tl, type) %>% summarize(mean_bl=mean(branch_length),
+                                 q025=quantile(branch_length, 0.025),
+                                 q975=quantile(branch_length, 0.975))
+```
+
 ## Misc
 
 ```{r}

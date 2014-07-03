@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 import argparse
 import dendropy
-import sys
 
 
 def main():
@@ -13,15 +12,15 @@ def main():
     p.add_argument('tree', type=argparse.FileType('w'))
     a = p.parse_args()
 
-    tree_full = '((A:1e-6,B:1e-6):0.0,C:{0});'.format(a.distance)
-    tree = '(A:1e-6,B:1e-6);'
+    tree = '((A:1e-6,B:1e-6):1e-6,D:1e-6)'
+    tree_full = '({0}:1e-6,C:{1});'.format(tree, a.distance)
 
     with a.tree as fp:
         fp.write(tree_full + '\n')
 
     tl = dendropy.TreeList()
     for _ in xrange(a.count):
-        tl.append(dendropy.Tree.get_from_string(tree, 'newick'))
+        tl.append(dendropy.Tree.get_from_string(tree + ';', 'newick'))
 
     with a.nexus as fp:
         tl.write_to_stream(fp, 'nexus')

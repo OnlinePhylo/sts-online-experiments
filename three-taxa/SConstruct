@@ -63,14 +63,24 @@ def fasta(env, outdir, c):
                      'output.sequence.file=$TARGET '
                      'output.sequence.format=Fasta '
                      'alphabet=DNA '
-                     'number_of_sites=10 '
+                     'number_of_sites=500 '
                      'rate_distribution=Constant '
-                     'model=JC69 ')[0]
+                     'model=JC69')[0]
+                     #'model=JC69 && sed -i -e "6s/[ACGT]/N/g" $TARGET')[0]
+
+@w.add_target_with_env(env)
+def mb(env, outdir, c):
+    nex, = env.Local('$OUTDIR/mb.nex', '$fasta', 'seqmagick convert --alphabet dna $SOURCE $TARGET')
+    mb_conf = env.Local('$OUTDIR/mb.mb',
+                          nex,
+                          'generate_mb.py -l 50000 -o $TARGET -c 3 -r 1 $SOURCE')
+    mb_out = env.Command(['$OUTDIR/mb.t', '$OUTDIR/mb.p'], mb_conf, 'mb $SOURCE')
+    return mb_out
+
 
 
 @w.add_target_with_env(env)
 def empirical_posterior(env, outdir, c):
-    j = joiner(outdir)
     result = env.Command('$OUTDIR/full.empirical.csv',
                          ['$fasta', c['trees']['tree']],
                          'empirical-posterior '
@@ -79,12 +89,14 @@ def empirical_posterior(env, outdir, c):
                          'input.sequence.file=$SOURCE '
                          'input.sequence.format=Fasta '
                          'input.sequence.sites_to_use=all '
+                         'model=JC69 '
+                         'rate_distribution=Constant '
                          'empirical-posterior.output_path=$TARGET '
                          'empirical-posterior.new_taxon=C')[0]
     return result
 
 
-w.add('proposal_method', ['guided', 'lcfit', 'uniform-edge'])
+w.add('proposal_method', ['guided', 'uniform-edge'])
 
 
 @w.add_target_with_env(env)
@@ -100,9 +112,9 @@ def sts_online(env, outdir, c):
 @w.add_target_with_env(env)
 def comparison(env, outdir, c):
     j = joiner(outdir)
-    result, = env.Command(j('bl_comparison.json'),
-                          [c['sts_online'], c['empirical_posterior']],
-                          'compare-dists.py $SOURCES -o $TARGET')
+    result, = env.Local(j('bl_comparison.json'),
+                        [c['sts_online'], c['mb'][1], c['empirical_posterior']],
+                        'compare-dists.py $SOURCES -o $TARGET')
     return result
 
 w.add_controls(env)
@@ -122,8 +134,8 @@ def distribution_comp_csv(env, outdir, c):
     env['kvs'] = ('proposal_method=$proposal_method '
                   'seed=$seed branch_length=$branch_length')
     r, = env.Local('$OUTDIR/bl_comparison.csv',
-                   [c['sts_online'], c['empirical_posterior'], c['control']],
-                   'sleep 5 && compare-dists.r ${SOURCES[:2]} /dev/stdout | '
+                   [c['sts_online'], c['mb'][1], c['empirical_posterior'], c['control']],
+                   'sleep 5 && compare-dists.r ${SOURCES[:3]} /dev/stdout | '
                    'decorate-csv.py $kvs > $TARGET')
     c['dist_comparisons'].append(r)
 
