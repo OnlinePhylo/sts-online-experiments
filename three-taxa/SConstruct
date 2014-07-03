@@ -39,7 +39,7 @@ def trees(env, outdir, c):
     nexus, tree = env.Local(
         ['$OUTDIR/pruned.nex', '$OUTDIR/full.tre'],
         [],
-        'generate-trees.py --count 5000 --distance $branch_length $TARGETS')
+        'generate-trees.py --count 1000 --distance $branch_length $TARGETS')
     env.Depends([nexus, tree], 'bin/generate-trees.py')
     return {'nexus': nexus, 'tree': tree}
 
