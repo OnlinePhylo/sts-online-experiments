@@ -2,7 +2,6 @@
 
 from __future__ import division
 
-import glob
 import os
 import os.path
 import functools
@@ -10,6 +9,7 @@ import functools
 from nestly import Nest, stripext
 from nestly.scons import SConsWrap
 from bioscons.slurm import SlurmEnvironment
+
 
 def joiner(*args):
     return functools.partial(os.path.join, *args)
@@ -78,6 +78,7 @@ def empirical_posterior(env, outdir, c):
                          'input.tree.format=Newick '
                          'input.sequence.file=$SOURCE '
                          'input.sequence.format=Fasta '
+                         'input.sequence.sites_to_use=all '
                          'empirical-posterior.output_path=$TARGET '
                          'empirical-posterior.new_taxon=C')[0]
     return result
