@@ -22,6 +22,7 @@ for k in ('SLURM_NTASKS', 'SLURM_NPROCS', 'SLURM_NNODES',
 env = SlurmEnvironment(ENV=environ)
 env.PrependENVPath('PATH', './bin')
 env.PrependENVPath('PATH', './src')
+env.Execute('make -C src')
 
 env['outdir'] = 'output'
 
