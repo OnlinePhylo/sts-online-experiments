@@ -38,7 +38,7 @@ env['BUILDERS']['NexusToNewick'] = Builder(action='nexus_to_newick.py $SOURCE $T
 env['BUILDERS']['MrBayesConf'] = Builder(action='generate_mb.py --runs $MB_NRUNS --length 300000 $SOURCE -o $TARGET', suffix='.mb', src_suffix='.nex')
 # End builders
 
-natural_extension = env.SConscript('src/SConscript')
+#natural_extension = env.SConscript('src/SConscript')
 
 w = SConsWrap(Nest(), dest_dir='output', alias_environment=env)
 
