@@ -62,13 +62,6 @@ w.add_aggregate('pendant_bl', list)
 
 @w.add_target_with_env(env)
 def fasta(env, outdir, c):
-    # Use the master build of bppseqgen: required for --seed
-    env.PrependENVPath(
-        'PATH',
-        '/home/matsengrp/local/encap/bpp-master-20140414/bin')
-    env.PrependENVPath(
-        'LD_LIBRARY_PATH',
-        '/home/matsengrp/local/encap/bpp-master-20140414/lib')
     j = joiner(outdir)
     target = j(stripext(c['tree']) + '.fasta')
     return env.Local(target, c['tree'],
