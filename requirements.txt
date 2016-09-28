@@ -7,7 +7,7 @@ biopython==1.64
 bioscons==0.7.1
 csvkit==0.7.3
 dbf==0.94.003
-jdcal==1.0
+jdcal==1.0.1
 nestly==0.6
 numpy==1.8.1
 openpyxl==1.8.6
