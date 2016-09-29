@@ -21,7 +21,7 @@ trees = sorted(map(os.path.abspath, glob.glob('trees/[15]0taxon*.nwk')))
 
 environ = os.environ.copy()
 for k in ('SLURM_NTASKS', 'SLURM_NPROCS', 'SLURM_NNODES',
-          'SLURM_NTASKS_PER_CORE', 'SLURM_CPUS_PER_TASK', 'SLURM_EXCLUSIVE'):
+          'SLURM_NTASKS_PER_CORE', 'SLURM_CPUS_PER_TASK'):
     environ[k] = '1'
 
 env = SlurmEnvironment(ENV=environ)
