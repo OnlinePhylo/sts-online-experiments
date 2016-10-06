@@ -15,7 +15,7 @@ pandas==0.14.0
 python-dateutil==2.4.2
 pytz==2015.2
 scipy==0.14.0
-git+https://github.com/fhcrc/seqmagick.git@0.6.1-dev#egg=seqmagick
+seqmagick==0.6.1
 six==1.9.0
 wsgiref==0.1.2
 xlrd==0.9.3
