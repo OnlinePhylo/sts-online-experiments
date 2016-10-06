@@ -1,0 +1,75 @@
+---
+title: "Uniform proposals"
+output:
+  html_document:
+    theme: cerulean
+---
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(jsonlite)
+library(tidyr)
+theme_set(theme_bw(16))
+
+doc <- fromJSON('output/0.1/0/uniform-edge/pruned.sts.json')
+emp <- read.csv('output/0.1/0/full.empirical.csv', as.is=TRUE)
+
+props <- doc[['proposals']]
+```
+
+## Particle log weights are likelihood and a constant
+
+```{r}
+
+g <- gather(emp, variable, value, likelihood, posterior) %>%
+  group_by(variable) %>%
+  mutate(value2 = value - max(value))
+
+p1 <- ggplot(props) +
+  geom_line(aes(x=branch_length, y = value2, linetype = variable), data = g) +
+  geom_point(aes(x = pendantBranchLength, y = newLogWeight - max(newLogWeight)), alpha = 0.6, shape = 19) +
+  xlab("Pendant length") +
+  ylab("value - max(value)") +
+  scale_shape_identity(guide = 'legend') +
+  scale_linetype_manual(values = c('dashed', 'dotted'))
+print(p1)
+```
+
+This makes some sense - the weights are:
+
+$$
+w_{r,k} = \frac{\gamma_*(s_{r,k})}{\gamma_*(s_{r - 1, k}) q(s_{r - 1, k} \rightarrow s_{r, k})}
+$$
+
+$$
+\gamma_*(\cdot) = P(T | D) P(T)
+$$
+
+The tree prior $P(T)$ is an exponential branch length prior with mean 0.1, as is the proposal density $q(s_{r - 1, k} \rightarrow s_{r, k})$.
+For new branch $t$, the prior $P(t)$ and the proposal density $q(\cdot)$ will cancel.
+
+**TODO**: what about the bisected branch?
+
+## Branch length
+
+```{r}
+tl <- rbind(data.frame(branch_length = doc[['trees']][['treeLength']], type = 'sts'),
+            data.frame(branch_length = rexp(5000, rate = 1 / 0.1), type = 'prior'))
+
+p2 <- ggplot(tl, aes(x = branch_length, color = type)) +
+  geom_density() +
+  xlab("Pendant length")
+print(p2)
+
+group_by(tl, type) %>% summarize(mean_bl=mean(branch_length),
+                                 q025=quantile(branch_length, 0.025),
+                                 q975=quantile(branch_length, 0.975))
+```
+
+## Misc
+
+```{r}
+getwd()
+as.POSIXlt(Sys.time())
+```

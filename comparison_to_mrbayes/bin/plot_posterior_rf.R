@@ -19,10 +19,12 @@ pc <- transform(pc, trim_taxon=factor(trim_taxon, levels=tt$trim_taxon))
 
 #print(aggregate(rf_distance~file, pc, length))
 
-m <- melt(pc, measure.vars=c('rf_distance', 'weighted_rf', 'euclidean'))
 
 measure_names <- data.frame(variable=c('rf_distance', 'weighted_rf', 'euclidean'),
-                            measure=c('RF Distance', 'L2', 'L1'))
+                            measure=c('RF Distance', 'L2', 'L1'), stringsAsFactors=FALSE)
+pc[, measure_names$variable] <- sapply(pc[, measure_names$variable], function(x) as.numeric(as.character(x)))
+m <- melt(pc, measure.vars=measure_names$variable)
+
 
 m <- transform(m, measure=measure_names$measure[match(as.character(m$variable),
                                                       measure_names$variable)])
@@ -48,11 +50,12 @@ d_ply(m, .(measure, n_taxa), function(piece) {
   measure <- piece$measure[1]
   n_taxa_label <- piece$n_taxa_label[1]
   message(paste(n_taxa_label, measure))
-  p <- ggplot(piece, aes(x=ifelse(is.na(particle_factor), '', particle_factor), y=value, fill=type, weight=exp(log_weight))) +
+  piece <- transform(piece, xlab = proposal_method_name)
+  p <- ggplot(piece, aes(x=xlab, y=value, fill=type, weight=exp(log_weight))) +
       geom_boxplot() +
-      facet_grid(tree_label~trim_taxon, scales='free_x') +
+      facet_grid(tree_label~trim_taxon, scales='free_y') +
       theme(legend.position='bottom') +
-      xlab('Particle Factor (x 750 trees)') +
+      xlab('') +
       ylab(measure) +
       ggtitle(n_taxa_label)
   print(p)

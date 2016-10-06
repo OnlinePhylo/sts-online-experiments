@@ -1,0 +1,45 @@
+---
+title: STS single branch
+output:
+  html_document:
+    theme: cerulean
+---
+
+```{r}
+library(assertthat)
+library(ggplot2)
+library(plyr)
+library(jsonlite)
+
+theme_set(theme_bw(16) + theme(strip.background = element_blank()))
+
+args <- commandArgs(TRUE)
+assert_that(length(args) >= 1)
+keys <- c('seed', 'branch_length', 'proposal_method', 'ess', 'kl', 'hellinger')
+```
+
+Realizations used:
+```{r}
+#args
+```
+
+```{r}
+df <- ldply(args, function(i) as.data.frame(fromJSON(i)[keys]))
+df$kl[df$kl > 1e100] <- Inf
+```
+
+```{r, results = 'asis'}
+#knitr::kable(df)
+```
+
+```{r}
+p <- ggplot(df, aes(x = ordered(branch_length), y = kl, fill = proposal_method)) +
+  geom_boxplot()
+print(p)
+p <- ggplot(df, aes(x = ordered(branch_length), y = hellinger, fill = proposal_method)) +
+  geom_boxplot()
+print(p)
+p <- ggplot(df, aes(x = ordered(branch_length), y = ess, fill = proposal_method)) +
+  geom_boxplot()
+print(p)
+```

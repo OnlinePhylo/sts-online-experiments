@@ -11,8 +11,9 @@ begin mrbayes;
     execute {nexus};
     lset nst=1 rates=equal;
     prset statefreqpr=fixed(equal);
-    {extra}
+    constraint myclade = A B D;
     mcmcp nruns={nruns} nchains={nchains} ngen={length} samplefreq={samplefreq} printfreq={printfreq} file={out_base} diagnfreq={printfreq};
+    {extra}
     mcmc;
 end;
 """
@@ -34,7 +35,9 @@ def main():
     if n_sequences <= 4:
         extra = """propset ParsSPR(Tau,V)$prob=0;
   propset ExtSPR(Tau,V)$prob=0;
-  propset ExtTBR(Tau,V)$prob=0;"""
+  propset ExtTBR(Tau,V)$prob=0;
+  propset NNI(Tau,V)$prob=0;
+  """
 
     t = TEMPLATE.format(nexus=a.nexus_path, out_base=base, extra=extra, length=a.length,
                         samplefreq=a.length // 1000, printfreq = a.length // 100,

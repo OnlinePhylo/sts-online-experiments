@@ -15,13 +15,17 @@ import dendropy
 
 log = logging.getLogger('asdsf')
 
-ASDSFResult = collections.namedtuple('ASDSFResult', ['asdsf', 'msdsf', 'lod_table'])
+ASDSFResult = collections.namedtuple('ASDSFResult',
+                                     ['asdsf', 'msdsf', 'lod_table'])
+
 
 def parse_lod_table(fp):
     return [[float(i) for i in line.split(None)[:-1]] for line in fp]
 
+
 def pp_table_of_lod_table(lod_table):
     return [[10.0 ** i / (1 + 10.0 ** i) for i in row] for row in lod_table]
+
 
 def calculate_asdsf_msdsf(tree_path1, tree_path2, min_support=0.1, skip=0):
     """
@@ -29,10 +33,10 @@ def calculate_asdsf_msdsf(tree_path1, tree_path2, min_support=0.1, skip=0):
     """
     with tempfile.NamedTemporaryFile(prefix='LOD_', suffix='.txt') as tf:
         cmd = ['trees-bootstrap',
-                '--min-support', str(min_support),
-                '--skip', str(skip),
-                tree_path1, tree_path2,
-                '--LOD-table', tf.name]
+               '--min-support', str(min_support),
+               '--skip', str(skip),
+               tree_path1, tree_path2,
+               '--LOD-table', tf.name]
         log.info('Running: %s', ' '.join(cmd))
         output = subprocess.check_output(cmd)
         regex = re.compile(r'ASDSF\[min=\d\.\d+\]\s*=\s*(\d\.\d+)\s+MSDSF\s+=\s+(\d\.\d+)')
@@ -87,16 +91,22 @@ def main():
         #for tree_path in (a.reference_tree1, a.reference_tree2):
         for tree_path in [a.reference_tree1]:
             log.info("Reading from %s", tree_path)
-            ref_trees.read_from_path(tree_path, 'nexus', tree_offset=a.burnin)
+            ref_trees.read_from_path(tree_path,
+                                     'nexus',
+                                     tree_offset=a.burnin)
 
-        ntf = functools.partial(tempfile.NamedTemporaryFile, suffix='.nwk', prefix='trees-')
+        ntf = functools.partial(tempfile.NamedTemporaryFile,
+                                suffix='.nwk',
+                                prefix='trees-')
 
         write_newick = functools.partial(dendropy.TreeList.write_to_stream,
-                schema='newick',
-                suppress_rooting=True)
+                                         schema='newick',
+                                         suppress_rooting=True)
 
         with ntf() as ref_fp:
-            log.info('Writing %d reference trees to %s', len(ref_trees), ref_fp.name)
+            log.info('Writing %d reference trees to %s',
+                     len(ref_trees),
+                     ref_fp.name)
 
             write_newick(ref_trees, ref_fp)
             ref_fp.flush()
@@ -109,11 +119,14 @@ def main():
                     write_newick(sts_trees, sts_fp)
                     sts_fp.flush()
                     sts_fp.seek(0)
-                    asdsf, msdsf, lod = calculate_asdsf_msdsf(ref_fp.name, sts_fp.name)
-                    w.writerow(('mrbayes-sts', path, asdsf, msdsf))
+                    asdsf, msdsf, lod = calculate_asdsf_msdsf(ref_fp.name,
+                                                              sts_fp.name)
+                    w.writerow(('mrbayes-sts', a.reference_tree1, path, asdsf,
+                                msdsf))
 
                 if pp_writer:
-                    rows = (['mrbayes-sts', ref_fp.name, path] + row for row in pp_table_of_lod_table(lod))
+                    rows = (['mrbayes-sts', a.reference_tree1, path] + row
+                            for row in pp_table_of_lod_table(lod))
                     pp_writer.writerows(rows)
 
         if pp_writer:
