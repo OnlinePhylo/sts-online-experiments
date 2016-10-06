@@ -84,7 +84,7 @@ def full_phylip(env, outdir, c):
 
 @w.add_target_with_env(env)
 def phyml_tree(env, outdir, c):
-    return env.Command('${full_phylip}_phyml_tree.txt',
+    return env.Local('${full_phylip}_phyml_tree.txt',
             ['$full_phylip', '$tree'],
             'phyml -i ${SOURCES[0]} -u ${SOURCES[1]} -c 1 -m JC69 -o l -b 0')[0]
 
@@ -107,7 +107,7 @@ def full_mrbayes_trees(env, outdir, c):
     targets = [j('{0}.run{1}.{2}'.format(stripext(str(c['full_nexus'])), i, t))
                for t in ('t', 'p')
                for i in xrange(1, env['MB_NRUNS'] + 1)]
-    res = env.SRun(targets, c['full_mrbayes_config'],
+    res = env.Local(targets, c['full_mrbayes_config'],
                    'mb $SOURCE && sed -i -e "s/e+00//g" $TARGETS')
     res = {'trees': res[:env['MB_NRUNS']],
            'params': res[env['MB_NRUNS']:]}
@@ -130,7 +130,7 @@ def full_mrbayes_newick(env, outdir, c):
 
 @w.add_target_with_env(env)
 def full_mrbayes_consensus(env, outdir, c):
-    return [env.Command('$OUTDIR/' + stripext(str(t)) + '.sum.tre',
+    return [env.Local('$OUTDIR/' + stripext(str(t)) + '.sum.tre',
                         t,
                         'sumtrees.py -q -b 250 $SOURCE > $TARGET')[0] for t in c['full_mrbayes_trees']['trees']]
 
@@ -141,7 +141,7 @@ def full_mrbayes_consensus(env, outdir, c):
                #c['full_mrbayes_trees']['trees'][0],
                #c['fasta']]
     #targets = '$OUTDIR/natural_extension.csv'
-    #return env.Command(targets, sources,
+    #return env.Local(targets, sources,
             #'${SOURCES[0]} input.sequence.file=${SOURCES[2]} '
             #'natural_extension.trees_nexus=${SOURCES[1]} '
             #'natural_extension.prune_taxon=$trim_taxon '
@@ -187,7 +187,7 @@ def trimmed_mrbayes_config(env, outdir, c):
 def trimmed_mrbayes_trees(env, outdir, c):
     env['MB_NRUNS'] = 1
     targets = ['$OUTDIR/${{trim_base}}.{0}'.format(j) for j in ('t', 'p')]
-    res = env.SRun(targets,
+    res = env.Local(targets,
                    ['$trimmed_mrbayes_config', '$trimmed_nexus'],
                    'mb $SOURCE && sed -i -e "s/e+00//g" $TARGETS')
     return {'trees': res[:env['MB_NRUNS']],
@@ -219,7 +219,7 @@ def proposal_method_name(c):
 @w.add_target_with_env(env)
 def sts_online(env, outdir, c):
     j = joiner(outdir)
-    result = [env.Command(j(stripext(str(treefile)) + '.sts.json'),
+    result = [env.Local(j(stripext(str(treefile)) + '.sts.json'),
                           ['$fasta', treefile],
                           'sts-online -p $particle_factor $proposal_args -b 250 $SOURCES $TARGET')[0]
               for treefile in c['trimmed_mrbayes_trees']['trees'][:1]]
@@ -245,7 +245,7 @@ pp_files = []
 def sts_asdsf_comparison(env, outdir, c):
     env['kvs'] = ' '.join('{0}="{1}"'.format(k, c.get(k, '')) for k in posterior_comparisons_keys)
 
-    asdsf, pp = env.Command(['$OUTDIR/asdsf.csv', '$OUTDIR/pp.csv'],
+    asdsf, pp = env.Local(['$OUTDIR/asdsf.csv', '$OUTDIR/pp.csv'],
                             env.Flatten([c['full_mrbayes_trees']['trees'], c['sts_online']]),
                             'asdsf.py $SOURCES --pp-table ${TARGETS[1]} | '
                             'decorate_csv.py $kvs > $TARGET')
