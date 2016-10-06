@@ -150,7 +150,7 @@ def full_mrbayes_consensus(env, outdir, c):
 
 
 w.add('trim_replicates', [3], create_dir=False)
-w.add('trim_count', [1, 2], create_dir=False)
+w.add('trim_count', [1, 2, 5], create_dir=False)
 
 
 def trim_taxon(c):
@@ -194,7 +194,7 @@ def trimmed_mrbayes_trees(env, outdir, c):
             'params': res[:env['MB_NRUNS']]}
 
 #w.add('particle_factor', [1, 2, 5])
-w.add('particle_factor', [1, 2, 4])
+w.add('particle_factor', [1])
 
 @w.add_nest(update=True)
 def proposal_method_name(c):
