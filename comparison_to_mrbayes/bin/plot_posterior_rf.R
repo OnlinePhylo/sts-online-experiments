@@ -50,7 +50,7 @@ d_ply(m, .(measure, n_taxa), function(piece) {
   measure <- piece$measure[1]
   n_taxa_label <- piece$n_taxa_label[1]
   message(paste(n_taxa_label, measure))
-  piece <- transform(piece, xlab = ifelse(is.na(proposal_method), '', proposal_method_name))
+  piece <- transform(piece, xlab = proposal_method_name)
   p <- ggplot(piece, aes(x=xlab, y=value, fill=type, weight=exp(log_weight))) +
       geom_boxplot() +
       facet_grid(tree_label~trim_taxon, scales='free_y') +
