@@ -8,3 +8,5 @@
 /comparison_to_mrbayes/50taxon_rf_tree2.svg
 /comparison_to_mrbayes/Rplots.pdf
 /comparison_to_mrbayes/ess.pdf
+packrat/lib*/
+packrat/src/

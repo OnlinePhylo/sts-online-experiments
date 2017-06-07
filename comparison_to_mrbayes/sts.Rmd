@@ -1,0 +1,793 @@
+---
+title: "STS"
+output:
+  pdf_document:
+    toc: yes
+---
+
+
+```{r setup, include=FALSE}
+suppressPackageStartupMessages(library(ggplot2))
+suppressPackageStartupMessages(library(dplyr))
+suppressPackageStartupMessages(library(tidyr))
+suppressPackageStartupMessages(library(reshape2))
+suppressPackageStartupMessages(library(stringr))
+suppressPackageStartupMessages(library(scales))
+knitr::opts_chunk$set(echo = TRUE, fig.path='Figs/')
+```
+
+```{r}
+theme_set(theme_bw(16) + theme(axis.text.x = element_text(angle = 30, hjust = 1),
+                               strip.background = element_blank()))
+
+map <- data.frame(original=c('uniform-length', 'guided', 'lcfit2', 'lcfit', 'guided-parsimony'),
+                  code=c('U*UP', 'L*NM', 'L*AF','LAF', 'PAF'),
+                  stringsAsFactors=FALSE)
+
+legend=c(expression(paste(tilde(U),"UP")),
+         expression(paste(tilde(L),"NM")),
+         expression(paste(tilde(L),"AF")),
+         'LAF','PAF')
+colors <- scales::hue_pal()(length(legend))
+shapes <- c(3,17,18,19,4)
+```
+
+```{r}
+ess <- read.csv(file.path('output','ess_calls.csv'), as.is=TRUE)
+
+ess <- transform(ess,
+	proposal_method_name=map$code[match(as.character(ess$proposal_method_name), map$origin)],
+	last_ess = as.numeric(last_ess),
+	n_taxa_str = factor(paste(n_taxa, 'taxa'), levels=c('10 taxa', '50 taxa', '100 taxa'))
+)
+ess <- mutate(ess,
+        trim_taxon=factor(trim_taxon, levels=unique(trim_taxon)[order(nchar(unique(trim_taxon)), unique(trim_taxon))]))
+ess <- rename(ess, Proposal=proposal_method_name)
+ess <- transform(ess, Proposal = factor(Proposal,levels=map$code))
+
+ess <- mutate(ess, tree=sub('\\.nwk$', '', basename(tree)))
+ess <- mutate(ess, Replicate=as.integer(sub('\\d+taxon-(\\d+)', '\\1', tree)))
+ess <- mutate(ess, Replicate=factor(Replicate))
+
+ess$Proposal2 = ess$Proposal
+levels(ess$Proposal2) <- legend
+```
+
+
+
+
+# Effective sample size (ESS)
+Effective sample size calculated with different proposals.
+
+```{r ess-all, fig.height=5, fig.width=15}
+
+plt <- function(df)
+  ggplot(data = df, aes(x = particle_factor, y = last_ess,
+    color = Proposal, linetype = Proposal)) +
+    geom_point() +
+    facet_grid(Replicate~trim_taxon, scales = "free_y") +
+    geom_smooth(method='lm', aes(particle_factor, last_ess),size=0.5,se=FALSE) +
+    theme(legend.position = 'bottom') +
+    scale_colour_manual(name="Proposal", values=colors, labels=legend) +
+    scale_linetype_manual(name="Proposal", values=seq(1,5), labels=legend) +
+    #scale_shape_manual(name="Proposal", values=c(16,17,18,19,20), labels=map$legend) +
+    xlab("Particle factor") +
+    ylab("ESS")
+```
+
+```{r ess-10, fig.height=5, fig.width=13}
+print(subset(ess, n_taxa_str =='10 taxa') %>% plt(.))
+```
+
+```{r ess-50, fig.height=5, fig.width=13}
+print(subset(ess, n_taxa_str =='50 taxa') %>% plt(.))
+```
+
+```{r ess-100, fig.height=5, fig.width=13}
+print(subset(ess, n_taxa_str =='100 taxa') %>% plt(.))
+```
+        
+
+
+## Mean effective sample size: separated by number of taxa and number of trimmed taxa
+
+```{r ess-taxa-trim}
+ess1 <- ess %>%
+	group_by(n_taxa_str,trim_count,particle_factor,Proposal) %>%
+	summarise(avg=mean(last_ess))
+
+p <- ggplot(data = ess1, aes(x = particle_factor, y = avg,
+  color = Proposal, linetype = Proposal)) +
+  geom_point() +
+  facet_grid(trim_count~n_taxa_str , scales = "free_y") +
+  geom_smooth(method='lm', aes(particle_factor, avg),size=0.5,se=FALSE) +
+  theme(legend.position = 'bottom') +
+  scale_colour_manual(name="Proposal", values=colors, labels=legend) +
+  scale_linetype_manual(name="Proposal", values=seq(1,5), labels=legend) +
+  xlab("Particle factor") +
+  ylab("Mean ESS")
+print(p)
+```
+
+## Mean effective sample size: separated by number of taxa
+Mean effective sample size calculated with different proposals.
+
+```{r ess-taxa}
+ess1 <- ess %>%
+	group_by(n_taxa_str, particle_factor,Proposal) %>%
+	summarise(avg=mean(last_ess))
+
+p <- ggplot(data = ess1, aes(x=particle_factor, y=avg,
+   linetype = Proposal,shape = Proposal, color=Proposal)) +
+  geom_point() +
+  facet_grid(.~n_taxa_str, scales = "free_y") +
+  geom_smooth(method='lm', aes(particle_factor, avg),size=0.5,se=FALSE) +
+  theme(legend.position = 'bottom') +
+  scale_colour_manual(name="Proposal", values=colors, labels=legend) +
+  scale_linetype_manual(name="Proposal", values=seq(1,5), labels=legend) +
+  scale_shape_manual(name="Proposal", values=shapes, labels=legend) +
+  xlab("Particle factor") +
+  ylab("Mean ESS")
+print(p)
+```
+
+```{r ess-taxa-bw, include=FALSE}
+ess1 <- ess %>%
+	group_by(n_taxa_str, particle_factor,Proposal) %>%
+	summarise(avg=mean(last_ess))
+
+p <- ggplot(data = ess1, aes(x=particle_factor, y=avg,
+   linetype = Proposal,shape = Proposal)) +
+  geom_point() +
+  facet_grid(.~n_taxa_str, scales = "free_y") +
+  geom_smooth(method='lm', aes(particle_factor, avg),size=0.5,se=FALSE, color="black") +
+  theme(legend.position = 'bottom') +
+  #scale_colour_manual(name="Proposal", values=colors, labels=legend) +
+  scale_linetype_manual(name="Proposal", values=seq(1,5), labels=legend) +
+  scale_shape_manual(name="Proposal", values=shapes, labels=legend) +
+  xlab("Particle factor") +
+  ylab("Mean ESS")
+print(p)
+```
+
+# Number of partial updates
+
+Number of likelihood calls required by various proposal methods:
+
+```{r partial-update}
+p <- ggplot(ess, aes(x = Proposal, y = likelihood_calls,
+  fill = factor(particle_factor))) +
+  geom_boxplot() +
+  facet_grid(n_taxa_str ~ trim_count) +
+  scale_y_log10() +
+  scale_x_discrete(labels=legend) +
+  theme(legend.position = 'bottom') +
+  scale_fill_manual(name="Particle factor", values=colors) +
+  ylab('Number of partial updates') 
+print(p)
+```
+
+# Number of partials updates per unit ESS
+
+```{r partial-ess, fig.height=8, fig.width=9}
+p <- ggplot(ess, aes(x = Proposal, y = likelihood_calls / last_ess, fill = Proposal)) +
+  geom_boxplot() +
+  facet_grid(n_taxa_str ~ trim_count, scales = 'free_y') +
+  geom_jitter(width = 0.2, aes(shape = Replicate), size=1) + 
+  scale_y_log10() +
+  theme(legend.position = 'bottom') +
+  scale_x_discrete(labels=legend) +
+  xlab('Proposal method') +
+  ylab('Number of partial updates per unit ESS') 
+print(p)
+```
+
+# Runtime
+
+Mean computation time in minutes
+
+```{r runtime-all, fig.width = 15, fig.height = 5}
+
+plt <- function(df)
+  ggplot(data = df, aes(x = particle_factor, y = time/60,
+    color = Proposal, linetype = Proposal)) +
+    geom_point() +
+    facet_grid(Replicate~trim_taxon, scales = "free_y") +
+    geom_smooth(method='lm', aes(particle_factor, time/60),size=0.5,se=FALSE) +
+    theme(legend.position = 'bottom') +
+    scale_colour_manual(name="Proposal", values=colors, labels=legend) +
+    scale_linetype_manual(name="Proposal", values=seq(1,5), labels=legend) +
+    #scale_shape_manual(name="Proposal", values=c(16,17,18,19,20), labels=map$legend) +
+    xlab("Particle factor") +
+    ylab("Time (minutes)")
+
+# for(n in sort(unique(ess$n_taxa_str)))
+#     print(subset(ess, n_taxa_str ==n) %>%
+#         plt(.) + ggtitle(n))
+```
+
+## 10 taxa
+```{r runtime-10, fig.width = 15, fig.height = 5}
+print(subset(ess, n_taxa_str=='10 taxa') %>% plt(.))
+```
+
+## 50 taxa
+```{r runtime-50, fig.width = 15, fig.height = 5}
+print(subset(ess, n_taxa_str=='50 taxa') %>% plt(.))
+```
+
+## 100 taxa
+```{r runtime-100, fig.width = 15, fig.height = 5}
+print(subset(ess, n_taxa_str=='100 taxa') %>% plt(.))
+```
+
+## Mean time: separated by number of taxa and number of trimmed taxa
+
+```{r runtime-taxa-trim}
+ess1 <- ess %>%
+	group_by(n_taxa_str,trim_count,particle_factor,Proposal) %>%
+	summarise(avg=mean(time/60))
+
+p <- ggplot(data = ess1, aes(x = particle_factor, y = avg,
+  color = Proposal, linetype = Proposal)) +
+  geom_point() + 
+  facet_grid(trim_count~n_taxa_str, scales = "free_y") + 
+  geom_smooth(method='lm', aes(particle_factor, avg),size=0.5,se=FALSE) +
+  theme(legend.position = 'bottom') +
+  scale_colour_manual(name="Proposal", values=colors, labels=legend) +
+  scale_linetype_manual(name="Proposal", values=seq(1,5), labels=legend) +
+  xlab("Particle factor") +
+  ylab("Mean time (minutes)")
+print(p)
+```
+
+## Mean time: separated by number of taxa
+
+```{r runtime-taxa}
+ess1 <- ess %>%
+	group_by(n_taxa_str,particle_factor,Proposal) %>%
+	summarise(avg=mean(time/60))
+
+p <- ggplot(data = ess1, aes(x = particle_factor, y = avg,
+  color = Proposal, linetype = Proposal)) +
+  geom_point() + 
+  facet_grid(.~n_taxa_str, scales = "free_y") + 
+  geom_smooth(method='lm', aes(particle_factor, avg),size=0.5,se=FALSE) +
+  theme(legend.position = 'bottom') +
+  scale_colour_manual(name="Proposal", values=colors, labels=legend) +
+  scale_linetype_manual(name="Proposal", values=seq(1,5), labels=legend) +
+  xlab("Particle factor") +
+  ylab("Mean time (minutes)")
+print(p)
+```
+
+# Runtime  per unit ESS
+```{r runtime-ess-taxa-trim,fig.height=8, fig.width=9}
+fmt<-function(x){format(x,nsmall = 1,scientific = FALSE)}
+
+p <- ggplot(data=ess, aes(x = Proposal, y = time / last_ess, fill = Proposal)) + 
+  geom_boxplot(outlier.shape = NA) +
+  facet_grid(n_taxa_str ~ trim_count, scales = 'free_y') +
+  geom_jitter(width = 0.2, aes(shape=Replicate), size=1) + 
+  scale_y_log10(labels = fmt) +
+  theme(legend.position = 'bottom') + 
+  scale_x_discrete(labels=legend) +
+  #xlab('Proposal method') +
+  ylab('Running time in minutes (log scale) per unit ESS') 
+print(p)
+```
+
+## Runtime  per unit ESS: seperated by number of taxa
+225 points per panel: tree replicate (5) x particle_factor (5) x taxa combination (3) x trim_count (3)
+```{r runtime-ess-taxa,fig.height=6,fig.width=8}
+p <- ggplot(data=ess, aes(x = Proposal, y = time / last_ess,fill=Proposal)) +
+  geom_boxplot(outlier.shape = NA) +
+  geom_jitter(width = 0.2, aes(shape = Replicate), size=1) + 
+  facet_grid(.~n_taxa, scales = 'free_y') +
+  scale_y_log10(labels = fmt) +
+  theme(legend.position = 'bottom') + 
+  scale_x_discrete(labels=legend) +
+  #xlab('Proposal method') +
+  ylab('Running time in minutes (log scale) per unit ESS') +
+  guides(fill=FALSE)
+print(p)
+```
+
+```{r runtime-ess-taxa-bw, fig.height=6, fig.width=8, include=FALSE}
+p <- ggplot(data=ess, aes(x = Proposal, y = time / last_ess)) +
+  geom_boxplot(outlier.shape = NA) +
+  geom_jitter(width = 0.2, aes(shape = Replicate), size=1) + 
+  facet_grid(.~n_taxa, scales = 'free_y') +
+  scale_y_log10(labels = fmt) +
+  theme(legend.position = 'bottom') + 
+  scale_x_discrete(labels=legend) +
+  #xlab('Proposal method') +
+  ylab('Running time in minutes (log scale) per unit ESS') 
+print(p)
+```
+
+## All replicates
+```{r runtime-ess-all, fig.height=5}
+p <- ggplot(data=ess, aes(x = Proposal, y = time / last_ess, fill = Proposal)) +
+  geom_boxplot()+
+  scale_y_log10(labels = fmt) +
+  theme(legend.position = 'none') + 
+  scale_x_discrete(labels=legend) +
+  ylab('Running time in minutes (log scale) per unit ESS') 
+print(p)
+```
+
+```{r, eval=FALSE, fig.width=14, include=FALSE}
+df <- read.csv(file.path('output', 'pp_comparison.csv'), as.is = TRUE)
+df <- rename(df, Proposal=proposal_method_name)
+
+df <- mutate(df, Proposal = map$code[match(as.character(df$Proposal), map$origin)])
+df <- mutate(df, tree=sub('\\.nwk$', '', basename(tree)))
+df <- mutate(df, Replicate=as.integer(sub('\\d+taxon-(\\d+)', '\\1', tree)))
+df <- mutate(df, Replicate=factor(Replicate))
+df <- mutate(df,n_taxa_str = as.factor(n_taxa))
+
+df[, c('pp1', 'pp2')] <- sapply(df[, c('pp1', 'pp2')], as.numeric)
+# Single leaf trimming
+df <- subset(df, !grepl('-', trim_taxon))
+
+mb <- df %>%
+  filter(type=="mrbayes-mrbayes") %>%
+  select(-Proposal)
+
+df2 <- filter(df, type!="mrbayes-mrbayes")
+
+df2 <- mutate(df2, Proposal=factor(Proposal,levels=map$code))
+levels(df2$Proposal) <- legend
+
+plt <- function(df)
+  ggplot(df, aes(x = pp1, y = pp2, color = type)) +
+    geom_point() +
+    geom_point(data=mb, aes(x = pp1, y = pp2, color = type)) +
+    facet_grid(n_taxa_str ~ Proposal, scales = 'free_y', labeller = label_parsed) +
+    coord_equal() +
+    theme(legend.position = 'bottom')
+
+for(tn in sort(unique(df2$Replicate)))
+  for(pf in sort(unique(df2$particle_factor)))
+    print(subset(df2, particle_factor == pf & Replicate==tn) %>%
+        plt(.) + ggtitle(paste( "Replicate",tn, "Particle factor", pf)))
+```
+
+\newpage
+
+# ASDSF
+
+[Average Standard Deviation of Split Frequencies (ASDSF)](http://www.bali-phy.org/README.html#idp54307728)
+
+```{r asdsf-all, fig.width = 10, fig.height = 7}
+asdsf <- read.csv(file.path('output', 'asdsf.csv'), as.is=TRUE)
+
+asdsf <- mutate(asdsf,
+	proposal_method_name = map$code[match(as.character(asdsf$proposal_method_name), map$origin)],
+	n_taxa_str = as.factor(n_taxa),
+	type_factor = ifelse(type == 'mrbayes-mrbayes', type, paste(type, particle_factor)),
+	trim_taxon=factor(trim_taxon, unique(trim_taxon)[order(nchar(unique(trim_taxon)), unique(trim_taxon))]))
+
+asdsf <- rename(asdsf, Proposal=proposal_method_name)
+asdsf <- mutate(asdsf, Proposal=factor(Proposal,levels=map$code))
+asdsf <- mutate(asdsf, Proposal2=Proposal)
+levels(asdsf$Proposal2) <- legend
+
+asdsf <- asdsf %>% mutate(tree=sub('\\.nwk$', '', basename(tree))) %>%
+  mutate(Replicate=as.integer(sub('\\d+taxon-(\\d+)', '\\1', tree))) %>%
+  mutate(Replicate=factor(Replicate))
+
+asdsf_ref <- 0.01
+title_asdsf <- "ASDSF"
+asdsf$asdsfy <- asdsf$asdsf
+if(nrow(asdsf[asdsf$asdsf==0,]) == 0){
+  asdsf$asdsfy <- log10(asdsf$asdsf)
+  asdsf_ref <- log10(asdsf_ref)
+  title_asdsf <- "ASDSF (log scale)"
+}
+
+asdsf2 <- filter(asdsf, type!="mrbayes-mrbayes")
+
+asdsf3 <- asdsf %>% 
+  filter(type=="mrbayes-mrbayes")
+mbasdsf <- data.frame(n_taxa_str = as.factor(c("10","50","100")),
+                      yint = c(asdsf3[asdsf3$n_taxa==10,]$asdsf[1], asdsf3[asdsf3$n_taxa==50,]$asdsf[1], asdsf3[asdsf3$n_taxa==100,]$asdsf[1]))
+
+plt <- function(df)
+  ggplot(data = df, aes(x = particle_factor, y = asdsfy, color=type_factor)) +
+	geom_point() +
+	facet_grid(trim_taxon~Proposal2, scales = "free_y", labeller = label_parsed) + 
+	geom_hline(yintercept = asdsf_ref, linetype = 'dashed') +
+  #coord_trans(y = "log10") +
+  scale_color_manual(name="Particle factor", values=colors, labels=c( '1','5', '10','50','100')) +
+  geom_hline(yintercept=mbasdsf$yint[as.numeric(df$n_taxa_str[1])]) +
+	theme(legend.position = 'bottom') +
+	ylab(title_asdsf) +
+	xlab("Particle factor") +
+  guides(color=guide_legend(nrow=1,byrow=TRUE))
+```
+
+## 10 taxa
+```{r asdsf-10, fig.width = 12, fig.height = 16}
+print(subset(asdsf2, n_taxa_str=='10') %>% plt(.))
+```
+
+## 50 taxa
+```{r asdsf-50, fig.width = 12, fig.height = 16}
+print(subset(asdsf2, n_taxa_str=='50') %>% plt(.))
+```
+
+## 100 taxa
+```{r asdsf-100, fig.width = 12, fig.height = 16}
+print(subset(asdsf2, n_taxa_str=='100') %>% plt(.))
+```
+
+
+## D1T10, D1T50 and D1T100
+Zoom in D1T10, D1T50 and D1T100
+
+```{r asdsf-D1}
+asdsf2 <- asdsf %>% 
+  filter(trim_taxon=='t1-t2-t3-t4-t5' & type!="mrbayes-mrbayes" & Replicate==1) %>%
+  mutate(n_taxa=paste("D1T", n_taxa, sep="")) %>%
+  mutate(n_taxa=factor(n_taxa,levels=c("D1T10","D1T50","D1T100")))
+
+asdsf3 <- asdsf %>% filter(type=="mrbayes-mrbayes")
+
+mbasdsf <- data.frame(n_taxa = as.factor(c("D1T10","D1T50","D1T100")),
+  yint = c(asdsf3[asdsf3$n_taxa==10,]$asdsf[1], asdsf3[asdsf3$n_taxa==50,]$asdsf[1], asdsf3[asdsf3$n_taxa==100,]$asdsf[1]))
+
+p <- ggplot(data = asdsf2, 
+      aes(x = particle_factor, y=asdsfy, shape=Proposal, linetype=Proposal,color=Proposal)) +
+  geom_line() +
+  geom_point() +
+	facet_grid(.~n_taxa, scales = "free_y") + 
+	geom_hline(yintercept = asdsf_ref, linetype = 'dashed', colour="Grey20") +
+	geom_hline(data = mbasdsf,aes(yintercept = yint),colour = "Grey20") +
+	theme(legend.position = 'bottom') +
+  scale_colour_manual(name="Proposal", values=colors, labels=legend) +
+  scale_linetype_manual(name="Proposal", values=seq(1,5), labels=legend) +
+  scale_shape_manual(name="Proposal", values=shapes, labels=legend) +
+	ylab('ASDSF') +
+	xlab("Particle factor")
+print(p)
+```
+
+```{r asdsf-D1-bw, include=FALSE}
+asdsf2 <- asdsf %>% 
+  filter(trim_taxon=='t1-t2-t3-t4-t5' & type!="mrbayes-mrbayes" & Replicate==1) %>%
+  mutate(n_taxa=paste("D1T", n_taxa, sep="")) %>%
+  mutate(n_taxa=factor(n_taxa))
+
+asdsf3 <- asdsf %>% filter(type=="mrbayes-mrbayes")
+
+mbasdsf <- data.frame(n_taxa = as.factor(c("D1T10","D1T50","D1T100")),
+  yint = c(asdsf3[asdsf3$n_taxa==10,]$asdsf[1], asdsf3[asdsf3$n_taxa==50,]$asdsf[1], asdsf3[asdsf3$n_taxa==100,]$asdsf[1]))
+
+p <- ggplot(data = asdsf2, 
+      aes(x = particle_factor, y=asdsfy, shape=Proposal, linetype=Proposal)) +
+  geom_line() +
+  geom_point() +
+	facet_grid(.~n_taxa, scales = "free_y") + 
+	geom_hline(yintercept = asdsf_ref, linetype = 'dashed', colour="Grey20") +
+	geom_hline(data = mbasdsf,aes(yintercept = yint),colour = "Grey20") +
+	theme(legend.position = 'bottom') +
+  scale_linetype_manual(name="Proposal", values=seq(1,5), labels=legend) +
+  scale_shape_manual(name="Proposal", values=shapes, labels=legend) +
+	ylab('ASDSF') +
+	xlab("Particle factor")
+print(p)
+```
+
+## ASDSF: MrBayes vs. STS
+```{r}
+proposal <- levels(ess$Proposal)
+ess1 = filter(ess, trim_count==5 & Proposal %in% proposal &n_taxa>10)
+ess1 <- droplevels(ess1)
+
+asdsf1 = filter(asdsf, trim_count==5 & Proposal %in% proposal &n_taxa>10)
+asdsf1 <- mutate(asdsf1, n_taxa=as.numeric(as.character(n_taxa)))
+asdsf1 <- droplevels(asdsf1)
+
+ess1 <- left_join(ess1, asdsf1, by=c("n_taxa","trim_taxon","trim_count","tree","particle_factor","Replicate",'Proposal','Proposal2'))
+
+ess1 <- select(ess1, tree, n_taxa, trim_taxon, time,asdsf,particle_factor,Replicate,Proposal2,Proposal)
+
+ess1 <- ess1 %>% filter(asdsf<=0.01) %>%
+  group_by(tree, trim_taxon,Proposal2) %>%
+  filter(particle_factor==min(particle_factor)) %>%
+  ungroup()
+
+# remove empties
+ess1 <- droplevels(ess1)
+proposal <- levels(factor(ess1$Proposal))
+
+ess1 <- select(ess1, -tree)
+
+mb <- read.csv(file.path('output','mrbayes.csv'), as.is=TRUE)
+mb <- filter(mb, n_taxa>10)
+mb <- select(mb, -trim_count)
+
+mb <- rename(mb, Replicate=replicate)
+
+mb <- mb %>%
+  group_by(Replicate, n_taxa, trim_taxon) %>%
+  summarise(time = sum(time), asdsf=mean(asdsf)) %>%
+  ungroup()
+mb <- mutate(mb,particle_factor=0)
+
+mbb <- mb
+mbb$Proposal <- proposal[1]
+for(p in 2:length(proposal)){
+  mbbb <- mb
+  mbbb$Proposal <- proposal[p]
+  mbb <- rbind(mbb, mbbb)
+}
+
+mbb$Proposal2 <- legend[match(as.character(mbb$Proposal), map$code)]
+
+ess1 <- rbind(mbb, ess1)
+
+ess1 <- transform(ess1, Particle_factor=factor(particle_factor))
+ess1 <- transform(ess1, Proposal=factor(Proposal,levels=map$code))
+ess1 <- transform(ess1, Proposal2=Proposal)
+levels(ess1$Proposal2) <- legend
+```
+
+```{r asdsf-mrbayes, fig.width=8}
+
+cp <- scales::hue_pal()(length(levels(ess1$Particle_factor))-1)
+cp <- append(cp, "black",0)
+
+p <- ggplot(ess1, aes(asdsf, time/60,shape=Particle_factor,color=Particle_factor)) +
+  geom_point(size=3) +
+  facet_grid(n_taxa~Proposal2, scales = "free_y", labeller = label_parsed) + 
+  #coord_trans(x = "log10") +
+  coord_trans(y = "log10") +
+  scale_y_continuous(breaks=c(1,2,10,30,60,120)) +
+  scale_colour_manual(name="Program/particle factor", values=cp, labels=c('MrBayes', 'sts/1','sts/5', 'sts/10','sts/50','sts/100')) +
+  scale_shape_manual(name="Program/particle factor", values=append(shapes,15), labels=c('MrBayes', 'sts/1','sts/5', 'sts/10','sts/50','sts/100')) +
+  theme(axis.text.x = element_text(size=12,angle=45,hjust=1,vjust=1),
+        axis.text.y = element_text(size=12,angle=0,hjust=1,vjust=0.5),
+        legend.position = 'bottom') +
+  ylab("Time (minutes)") +
+  xlab('ASDSF') +
+  guides(shape=guide_legend(nrow=1,byrow=TRUE),color=guide_legend(nrow=1,byrow=TRUE))
+print(p)
+```
+
+```{r}
+ess1 %>% filter(particle_factor>0)%>%group_by(Proposal,n_taxa)%>%summarise(n())
+```
+
+```{r asdsf-mrbayes-bw, fig.width=8, include=FALSE}
+p <- ggplot(ess1, aes(asdsf, time/60,shape=Particle_factor)) +
+  geom_point(size=3) +
+  facet_grid(.~Proposal2, scales = "free_y", labeller = label_parsed) + 
+  #coord_trans(x = "log10") +
+  coord_trans(y = "log10") +
+  scale_y_continuous(breaks=c(1,2,10,30,60,120)) +
+  scale_shape_manual(name="Program/particle factor", values=append(shapes,15), labels=c('MrBayes', 'sts/1','sts/5', 'sts/10','sts/50','sts/100')) +
+  theme(axis.text.x = element_text(size=12,angle=45,hjust=1,vjust=1),
+        axis.text.y = element_text(size=12,angle=0,hjust=1,vjust=0.5),
+        legend.position = 'bottom') +
+  ylab("Time (minutes)") +
+  xlab('ASDSF') +
+  guides(shape=guide_legend(nrow=1,byrow=TRUE))
+print(p)
+```
+# Posterior tree distances
+
+```{r}
+ pc <- read.csv(file.path('output','posterior_comparison.csv'), as.is=TRUE)
+# csvcut -C file,proposal_args,euclidean,rf_distance,log_weight,trim_count  output/posterior_comparison.csv > output/posterior_comparison2.csv
+#pc <- read.csv(file.path('output','posterior_comparison2.csv'), as.is=TRUE)
+
+pc <- rename(pc, Proposal=proposal_method_name)
+pc <- mutate(pc, Proposal = map$code[match(as.character(pc$Proposal), map$origin)])
+pc <- mutate(pc, Proposal = factor(Proposal,levels=map$code))
+levels(pc$Proposal) <- legend
+
+pc <- pc %>% mutate(tree=sub('\\.nwk$', '', basename(tree))) %>%
+  mutate(Replicate=as.integer(sub('\\d+taxon-(\\d+)', '\\1', tree))) %>%
+  mutate(Replicate=factor(Replicate))
+
+mb <- subset(pc,type == 'MrBayes')
+pc <- subset(pc,type != 'MrBayes')
+pc <- transform(pc,
+	type_factor = paste('sts/', particle_factor, sep=""),
+	trim_taxon=factor(trim_taxon, unique(trim_taxon)[order(nchar(unique(trim_taxon)), unique(trim_taxon))]))
+                
+mb <- transform(mb,
+	particle_factor = "Inf",
+	type_factor = 'MrBayes'
+)
+
+mb <- mb %>% mutate(tree=sub('\\.nwk$', '', basename(tree))) %>%
+  mutate(Replicate=as.integer(sub('\\d+taxon-(\\d+)', '\\1', tree))) %>%
+  mutate(Replicate=factor(Replicate))
+
+splitByProgram <- function(replicate, n, ts) {
+  pcc <- pc %>%
+    filter(n_taxa == n & trim_taxon%in% ts & Replicate==replicate) 
+
+  mbb <- mb %>%
+    filter(n_taxa == n & Replicate==replicate) %>%
+    select(-c(Proposal,trim_taxon))
+
+  n_row <- nrow(mbb)
+  r <- length(unique(pcc$Proposal))*length(unique(pcc$trim_taxon))
+  mbb <- mbb[rep(1:n_row, r),]
+  mbb$i <- rep(1:r, each=n_row)
+  g <- expand.grid(Proposal=unique(pcc$Proposal), trim_taxon=unique(pcc$trim_taxon))
+  g$i <- seq(1:nrow(g))
+  mbb <- full_join(mbb, g, by="i")
+  mbb <- select(mbb, -i)
+  pcc <- rbind(pcc,mbb)
+  pcc$particle_factor <- factor(pcc$particle_factor, levels=sort(as.numeric(unique(pcc$particle_factor))))
+  levels(pcc$particle_factor)[levels(pcc$particle_factor)=="Inf"] <- "MrBayes"
+  pcc$type_factor <- factor(pcc$type_factor, levels=c('sts/1', 'sts/5', 'sts/10', 'sts/50', 'sts/100', 'MrBayes'))
+  pcc
+}
+
+plt <- function(df)
+  ggplot(data=df, aes(x=type_factor, y=weighted_rf, fill=type_factor)) +
+  geom_violin(scale='width') +
+  facet_grid(trim_taxon~Proposal, scales='free_y', labeller=label_parsed) +
+  theme(legend.position='none') +
+  ylab("L1 distance") +
+  xlab("Program/particle factor")
+```
+
+### L1 norm for D1T10
+```{r L1-D1T10-all, fig.width = 10, fig.height = 15}
+print(splitByProgram(1, 10, unique(pc$trim_taxon)) %>% plt(.))
+```
+
+### L1 norm for D2T10
+```{r L1-D2T10-all, fig.width = 10, fig.height = 15}
+print(splitByProgram(2, 10, unique(pc$trim_taxon)) %>% plt(.))
+```
+
+### L1 norm for D3T10
+```{r L1-D3T10-all, fig.width = 10, fig.height = 15}
+print(splitByProgram(3, 10, unique(pc$trim_taxon)) %>% plt(.))
+```
+
+### L1 norm for D4T10
+```{r L1-D4T10-all, fig.width = 10, fig.height = 15}
+print(splitByProgram(4, 10, unique(pc$trim_taxon)) %>% plt(.))
+```
+
+### L1 norm for D5T10
+```{r L1-D5T10-all, fig.width = 10, fig.height = 15}
+print(splitByProgram(5, 10, unique(pc$trim_taxon)) %>% plt(.))
+```
+
+### L1 norm for D1T50
+```{r L1-D1T50-all, fig.width = 10, fig.height = 15}
+print(splitByProgram(1, 50, unique(pc$trim_taxon)) %>% plt(.))
+```
+
+### L1 norm for D2T50
+```{r L1-D2T50-all, fig.width = 10, fig.height = 15}
+print(splitByProgram(2, 50, unique(pc$trim_taxon)) %>% plt(.))
+```
+
+### L1 norm for D3T50
+```{r L1-D3T50-all, fig.width = 10, fig.height = 15}
+print(splitByProgram(3, 50, unique(pc$trim_taxon)) %>% plt(.))
+```
+
+### L1 norm for D4T50
+```{r L1-D4T50-all, fig.width = 10, fig.height = 15}
+print(splitByProgram(4, 50, unique(pc$trim_taxon)) %>% plt(.))
+```
+
+### L1 norm for D5T50
+```{r L1-D5T50-all, fig.width = 10, fig.height = 15}
+print(splitByProgram(5, 50, unique(pc$trim_taxon)) %>% plt(.))
+```
+
+
+
+### L1 norm for D1T100
+```{r L1-D1T100-all, fig.width = 10, fig.height = 15}
+print(splitByProgram(1, 100, unique(pc$trim_taxon)) %>% plt(.))
+```
+
+### L1 norm for D2T100
+```{r L1-D2T100-all, fig.width = 10, fig.height = 15}
+print(splitByProgram(2, 100, unique(pc$trim_taxon)) %>% plt(.))
+```
+
+### L1 norm for D3T100
+```{r L1-D3T100-all, fig.width = 10, fig.height = 15}
+print(splitByProgram(3, 100, unique(pc$trim_taxon)) %>% plt(.))
+```
+
+### L1 norm for D4T100
+```{r L1-D4T100-all, fig.width = 10, fig.height = 15}
+print(splitByProgram(4, 100, unique(pc$trim_taxon)) %>% plt(.))
+```
+
+### L1 norm for D5T100
+```{r L1-D5T100-all, fig.width = 10, fig.height = 15}
+print(splitByProgram(5, 100, unique(pc$trim_taxon)) %>% plt(.))
+```
+
+
+L1-norm for 10 taxa (figure for paper)
+```{r L1-D1T10-3, fig.width = 10, fig.height = 10}
+pcc <- splitByProgram(1, 10, c('t1', 't1-t2','t1-t2-t3-t4-t5'))
+
+p <- ggplot(data=pcc, aes(x=type_factor, y=weighted_rf, fill=type_factor)) +
+  geom_violin(scale='width') +
+  facet_grid(trim_taxon~Proposal, scales='free_y', labeller=label_parsed) +
+  theme(legend.position='none') +
+  ylab("L1 distance") +
+  xlab("Program/particle factor")
+print(p)
+```
+
+
+```{r L1-D1T10-3-bw, fig.width = 10, fig.height = 10, include=FALSE}
+pcc <- splitByProgram(1, 10, c('t1', 't1-t2','t1-t2-t3-t4-t5'))
+p <- ggplot(data=pcc, aes(x=type_factor, y=weighted_rf)) +
+  geom_violin(scale='width',fill='grey') +
+  facet_grid(trim_taxon~Proposal, scales='free_y', labeller=label_parsed) +
+  theme(legend.position = 'none') +
+  ylab("L1 distance") +
+  xlab("Program/particle factor")
+print(p)
+```
+
+
+L1-norm for 50 taxa (figure for paper)
+```{r L1-D1T50-3, fig.height=10, fig.width=10}
+pcc <- splitByProgram(1, 50, c('t1', 't1-t2','t1-t2-t3-t4-t5'))
+p <- ggplot(data=pcc, aes(x=type_factor, y=weighted_rf, fill=type_factor)) +
+  geom_violin(scale='width') +
+  facet_grid(trim_taxon~Proposal, scales='free_y', labeller=label_parsed) +
+  theme(legend.position='none') +
+  ylab("L1 distance") +
+  xlab("Program/particle factor")
+print(p)
+```
+
+
+```{r L1-D1T50-3-bw, fig.height=10, fig.width=10, include=FALSE}
+pcc <- splitByProgram(1, 50, c('t1', 't1-t2','t1-t2-t3-t4-t5'))
+p <- ggplot(data=pcc, aes(x=type_factor, y=weighted_rf)) +
+  geom_violin(scale='width',fill='grey') +
+  facet_grid(trim_taxon~Proposal, scales='free_y', labeller=label_parsed) +
+  theme(legend.position='none') +
+  ylab("L1 distance") +
+  xlab("Program/particle factor")
+print(p)
+```
+
+L1-norm for 100 taxa (figure for paper)
+```{r L1-D1T100-3, fig.height=10, fig.width=10}
+pcc <- splitByProgram(1, 100, c('t1', 't1-t2','t1-t2-t3-t4-t5'))
+p <- ggplot(data=pcc, aes(x=type_factor, y=weighted_rf, fill=type_factor)) +
+  geom_violin(scale='width') +
+  facet_grid(trim_taxon~Proposal, scales='free_y', labeller=label_parsed) +
+  theme(legend.position='none') +
+  ylab("L1 distance") +
+  xlab("Program/particle factor")
+print(p)
+```
+
+
+```{r L1-D1T100-3-bw, fig.height=10, fig.width=10, include=FALSE}
+pcc <- splitByProgram(1, 100, c('t1', 't1-t2','t1-t2-t3-t4-t5'))
+p <- ggplot(data=pcc, aes(x=type_factor, y=weighted_rf)) +
+  geom_violin(scale='width',fill='grey') +
+  facet_grid(trim_taxon~Proposal, scales='free_y', labeller=label_parsed) +
+  theme(legend.position='none') +
+  ylab("L1 distance") +
+  xlab("Program/particle factor")
+print(p)
+```

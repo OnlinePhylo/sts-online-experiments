@@ -11,6 +11,7 @@ begin mrbayes;
     execute {nexus};
     lset nst=1 rates=equal;
     prset statefreqpr=fixed(equal);
+    prset brlenspr = unconstrained:exponential(10.0); 
     {extra}
     mcmcp nruns={nruns} nchains={nchains} ngen={length} samplefreq={samplefreq} printfreq={printfreq} file={out_base} diagnfreq={printfreq};
     mcmc;

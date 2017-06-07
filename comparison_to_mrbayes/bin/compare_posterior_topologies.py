@@ -11,7 +11,7 @@ import os.path
 import sys
 
 import dendropy
-from dendropy.treecalc import euclidean_distance, symmetric_difference, robinson_foulds_distance
+from dendropy.calculate.treecompare import euclidean_distance, symmetric_difference, robinson_foulds_distance
 
 def compute_expectation(fn, trees):
     """
@@ -49,23 +49,27 @@ def load_trees_dendropy(fp, schema, **kwargs):
     tl = dendropy.TreeList.get_from_stream(fp, schema, **kwargs)
     for tree in tl:
         tree.log_weight = 0.0
-    return tl
-
-load_trees_nexus = functools.partial(load_trees_dendropy, schema='nexus')
-tree_parser(['.t', 'nex'])(load_trees_nexus)
+    return tllog_weight
 
 @tree_parser(['.json'])
 def load_from_json(fp, **kwargs):
-    kwargs.pop('tree_offset', None) # No burn-in for STS
-    root = json.load(fp)
-    def parse_tree(json_tree):
-        t = dendropy.Tree.get_from_string(str(json_tree['newickString']), 'newick', **kwargs)
-        t.log_weight = json_tree['logWeight']
-        return t
+    root = json.load(fp)    
+    path = os.path.splitext(fp.name)[0] + '.nwk'
+    weights = []
+    with open(path, 'w') as tp:
+        for tree in root['trees']:
+            weights.append(tree['logWeight'])
+            tp.write(tree['newickString']+'\n')
 
-    trees = root['trees'][kwargs.pop('tree_offset', 0):]
-    return [parse_tree(t) for t in trees]
+    tree_yielder = dendropy.Tree.yield_from_files(files=[path], schema='newick', **kwargs)
+    return tree_yielder, weights
 
+@tree_parser(['.t', 'nex'])
+def load_from_nexus(fp, **kwargs):
+    tree_yielder = dendropy.Tree.yield_from_files(files=[fp], schema='nexus', **kwargs)
+    return tree_yielder, None
+   
+    
 def main():
     p = argparse.ArgumentParser()
     p.add_argument('reference_tree', help="""Compare to this tree""", type=argparse.FileType('r'))
@@ -76,10 +80,11 @@ def main():
     a = p.parse_args()
 
     # Trees need a common taxon set
-    taxa = dendropy.TaxonSet()
+    taxa = dendropy.TaxonNamespace()
 
     with a.reference_tree as fp:
-        ref_tree = dendropy.Tree.get_from_stream(fp, 'newick', taxon_set=taxa)
+        ref_tree = dendropy.Tree.get_from_stream(fp, 'newick', taxon_namespace=taxa)
+    ref_tree.encode_bipartitions()
 
     def distances(tree):
         fns = (symmetric_difference, robinson_foulds_distance, euclidean_distance)
@@ -93,10 +98,13 @@ def main():
             parse = tree_parsers[ext]
 
             with argparse.FileType('r')(path) as fp:
-                trees = parse(fp, tree_offset=a.nexus_burnin, taxon_set=taxa)
+                tree_yielder, weights = parse(fp, taxon_namespace=taxa)
+                for idx, tree in enumerate(tree_yielder):
+                    if weights is None and idx < a.nexus_burnin: continue
 
-                for tree in trees:
-                    w.writerow([path, getattr(tree, 'log_weight', 0.0)] + distances(tree))
+                    tree.encode_bipartitions()
+                    weight = weights[idx] if weights is not None else 0
+                    w.writerow([path, weight] + distances(tree))
 
 if __name__ == '__main__':
     main()

@@ -1,21 +1,17 @@
-# also install scons 2.3.0 with:
-# pip install --egg scons==2.3.0
-DendroPy==3.12.0
-SQLAlchemy==0.9.9
-argparse==1.2.1
-biopython==1.64
-bioscons==0.7.1
-csvkit==0.7.3
+DendroPy==4.1.0
+SQLAlchemy==1.0.14
+argparse==1.4.0
+biopython==1.66
+csvkit==0.9.1
 dbf==0.94.003
-jdcal==1.0.1
-nestly==0.6
+jdcal==1.2
 numpy==1.8.1
-openpyxl==1.8.6
-pandas==0.14.0
-python-dateutil==2.4.2
-pytz==2015.2
+openpyxl==2.2.0-b1
+pandas==0.18.1
+python-dateutil==1.5
+pytz==2013.7
 scipy==0.14.0
 seqmagick==0.6.1
-six==1.9.0
+six==1.4.1
 wsgiref==0.1.2
-xlrd==0.9.3
+xlrd==1.0.0
