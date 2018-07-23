@@ -34,7 +34,7 @@ runCount = 2
 # Simulation
 taxonCounts = (10, 50, 100)
 treeReplicates = xrange(1, 6)
-trimCounts = 1, 2, 5)
+trimCounts = (1, 2, 5)
 trimReplicates = 3
 particleFactors = (1, 5, 10, 50, 100)
 
@@ -48,7 +48,7 @@ methods = {
 
 bin = os.path.join(dir, 'bin')
 
-#sts = os.path.join(bin,'sts-online')
+sts = os.path.join(bin,'sts-online')
 
 # scripts
 cmp_pt = os.path.join(bin, 'compare_posterior_topologies.py')
@@ -220,7 +220,7 @@ def main():
                         start = timer()
                         try:
                             check_call(cmd)
-                        except subprocess.CalledProcessError, e:
+                        except subprocess.CalledProcessError as e:
                             sys.stderr.write('FAILED\n')
                             continue
                         end = timer()
